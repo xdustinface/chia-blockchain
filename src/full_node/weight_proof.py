@@ -845,10 +845,10 @@ def _validate_sub_epoch_segments(
     for sub_epoch_n, segments in segments_by_sub_epoch.items():
         prev_ssi = curr_ssi
         curr_difficulty, curr_ssi = _get_curr_diff_ssi(constants, sub_epoch_n, summaries)
-        log.debug(f"validate sub epoch {sub_epoch_n}")
+        log.info(f"validate sub epoch {sub_epoch_n}")
         # recreate RewardChainSubSlot for next ses rc_hash
         sampled_seg_index = rng.choice(range(len(segments)))
-        log.debug(f"sub epoch {sub_epoch_n} has {len(segments)} segments sampled segment {sampled_seg_index}")
+        log.info(f"sub epoch {sub_epoch_n} has {len(segments)} segments sampled segment {sampled_seg_index}")
         if sub_epoch_n > 0:
             rc_sub_slot = __get_rc_sub_slot(constants, segments[0], summaries, curr_ssi)
             prev_ses = summaries[sub_epoch_n - 1]
@@ -891,32 +891,48 @@ def _validate_segment(
     prev = None
     sub_slots_since_prev = 0
     genesis = (segment.sub_epoch_n == 0) and first_segment_in_se
+    cc_sub_slot_hash = constants.GENESIS_CHALLENGE
     for idx, sub_slot_data in enumerate(segment.sub_slots):
+        log.info(f"validating sub slot data  {idx} out of {len(segment.sub_slots)}")
         if not sub_slot_data.is_end_of_slot() and after_challenge:
             if not validate_total_iters(segment, idx, curr_ssi, sub_slots_since_prev, prev, prev_ssi, genesis):
                 log.error(f"failed to validate sub slot data {idx} total iterations ")
                 return False, uint64(0), uint64(0), uint64(0)
         if sub_slot_data.is_challenge():
             after_challenge = True
-            required_iters = __validate_pospace(constants, segment, idx, curr_difficulty, ses, first_segment_in_se)
+            required_iters = __validate_pospace(constants, segment, idx, curr_difficulty, cc_sub_slot_hash)
             if required_iters is None:
                 return False, uint64(0), uint64(0), uint64(0)
             assert sub_slot_data.signage_point_index is not None
             ip_iters = ip_iters + calculate_ip_iters(  # type: ignore
                 constants, curr_ssi, sub_slot_data.signage_point_index, required_iters
             )
-            if sampled and (not _validate_challenge_block_vdfs(constants, idx, segment.sub_slots, curr_ssi)):
+        if sub_slot_data.is_challenge() and sampled:
+            log.info("validate sampled challenge block vdfs")
+            if not _validate_challenge_block_vdfs(constants, idx, segment.sub_slots, curr_ssi, cc_sub_slot_hash):
                 log.error(f"failed to validate challenge slot {idx} vdfs")
                 return False, uint64(0), uint64(0), uint64(0)
-        elif after_challenge and not _validate_sub_slot_data(constants, idx, segment.sub_slots, curr_ssi):
-            log.error(f"failed to validate sub slot data {idx} vdfs")
-            return False, uint64(0), uint64(0), uint64(0)
+        if sampled and after_challenge:
+            if not _validate_sub_slot_data(constants, idx, segment.sub_slots, curr_ssi):
+                log.error(f"failed to validate sub slot data {idx} vdfs")
+                return False, uint64(0), uint64(0), uint64(0)
         genesis = False
         prev_ssi = curr_ssi
         if not sub_slot_data.is_end_of_slot():
             prev = sub_slot_data
             sub_slots_since_prev = 0
         else:
+            icc_vdf = sub_slot_data.icc_slot_end_info
+            icc_vdf_hash: Optional[bytes32] = None
+            if icc_vdf is not None:
+                icc_vdf_hash = icc_vdf.get_hash()
+            cc_sub_slot_hash = ChallengeChainSubSlot(
+                sub_slot_data.cc_slot_end_info,
+                icc_vdf_hash,
+                None if ses is None else ses.get_hash(),
+                None if ses is None else ses.new_sub_slot_iters,
+                None if ses is None else ses.new_difficulty,
+            ).get_hash()
             sub_slots_since_prev += 1
             slot_iters = slot_iters + curr_ssi  # type: ignore
             slots = slots + uint64(1)  # type: ignore
@@ -929,6 +945,7 @@ def _validate_challenge_block_vdfs(
     sub_slot_idx: int,
     sub_slots: List[SubSlotData],
     ssi: uint64,
+    cc_sub_slot_hash: bytes32,
 ) -> bool:
     sub_slot_data = sub_slots[sub_slot_idx]
     if sub_slot_data.cc_signage_point is not None and sub_slot_data.cc_sp_vdf_info:
@@ -953,6 +970,7 @@ def _validate_challenge_block_vdfs(
             assert prev_ssd.cc_ip_vdf_info
             assert prev_ssd.total_iters
             assert sub_slot_data.total_iters
+            assert cc_sub_slot_hash == sub_slot_data.cc_ip_vdf_info.challenge
             ip_input = prev_ssd.cc_ip_vdf_info.output
             ip_vdf_iters = uint64(sub_slot_data.total_iters - prev_ssd.total_iters)
             cc_ip_vdf_info = VDFInfo(
@@ -1200,14 +1218,8 @@ def __validate_pospace(
     segment: SubEpochChallengeSegment,
     idx: int,
     curr_diff: uint64,
-    ses: Optional[SubEpochSummary],
-    first_in_sub_epoch: bool,
+    cc_sub_slot_hash: bytes32,
 ) -> Optional[uint64]:
-    if first_in_sub_epoch and segment.sub_epoch_n == 0 and idx == 0:
-        cc_sub_slot_hash = constants.GENESIS_CHALLENGE
-    else:
-        cc_sub_slot_hash = __get_cc_sub_slot(segment.sub_slots, idx, ses).get_hash()
-
     sub_slot_data: SubSlotData = segment.sub_slots[idx]
 
     if sub_slot_data.signage_point_index and is_overflow_block(constants, sub_slot_data.signage_point_index):
@@ -1320,31 +1332,6 @@ def __get_rc_sub_slot(
         constants.MIN_BLOCKS_PER_CHALLENGE_BLOCK,
     )
     return rc_sub_slot
-
-
-def __get_cc_sub_slot(sub_slots: List[SubSlotData], idx, ses: Optional[SubEpochSummary]) -> ChallengeChainSubSlot:
-    sub_slot: Optional[SubSlotData] = None
-    for i in reversed(range(0, idx)):
-        sub_slot = sub_slots[i]
-        if sub_slot.cc_slot_end_info is not None:
-            break
-
-    assert sub_slot is not None
-    assert sub_slot.cc_slot_end_info is not None
-
-    icc_vdf = sub_slot.icc_slot_end_info
-    icc_vdf_hash: Optional[bytes32] = None
-    if icc_vdf is not None:
-        icc_vdf_hash = icc_vdf.get_hash()
-    cc_sub_slot = ChallengeChainSubSlot(
-        sub_slot.cc_slot_end_info,
-        icc_vdf_hash,
-        None if ses is None else ses.get_hash(),
-        None if ses is None else ses.new_sub_slot_iters,
-        None if ses is None else ses.new_difficulty,
-    )
-
-    return cc_sub_slot
 
 
 def _get_curr_diff_ssi(constants: ConsensusConstants, idx, summaries):
