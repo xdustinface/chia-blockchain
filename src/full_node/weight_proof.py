@@ -142,7 +142,7 @@ class WeightProofHandler:
         ses_count = 0
         curr_height = tip_height
         blocks_n = 0
-        while blocks_n <= self.constants.WEIGHT_PROOF_RECENT_BLOCKS or ses_count <= 2 and curr_height > 0:
+        while blocks_n <= self.constants.WEIGHT_PROOF_RECENT_BLOCKS or ses_count < 2 and curr_height > 0:
             # add to needed reward chain recent blocks
             header_block = headers[self.blockchain.height_to_hash(curr_height)]
             block_rec = blocks[header_block.header_hash]
