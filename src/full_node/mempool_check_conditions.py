@@ -2,7 +2,8 @@ import time
 import traceback
 from typing import Dict, List, Optional
 
-from src.types.blockchain_format.program import NilSerializedProgram, SerializedProgram
+from src.full_node.block_store import BlockStore
+from src.types.blockchain_format.program import NilSerializedProgram, Program, SerializedProgram
 from src.types.blockchain_format.sized_bytes import bytes32
 from src.types.coin_record import CoinRecord
 from src.types.condition_var_pair import ConditionVarPair
@@ -103,7 +104,10 @@ def mempool_assert_relative_time_exceeds(condition: ConditionVarPair, unspent: C
 
 
 def build_block_program_args(
-    clvm_deserializer: SerializedProgram, generator_refs: SerializedProgram
+        clvm_deserializer: SerializedProgram,
+        generator_refs: List[uint32],  # Block heights for generators we will reuse
+        block_store: BlockStore, # Problem
+        current_block_height: uint32
 ) -> SerializedProgram:
     """
     The argument to the block program is a list. The first argument is the clvm
@@ -112,24 +116,38 @@ def build_block_program_args(
     """
 
     nil = NilSerializedProgram
+    # A nil generator_refs is equivalent to an empty list
     if clvm_deserializer == nil or generator_refs == nil:
         return nil
 
-    # TODO: Should the Generator block height ref list be in the form
-    # * A list of block heights: (int int int) or
-    # * A list of pairs of block heights, and generator byte string offsets: ((int . int) (int . int))
-    # `clvm_deserializer` is a clvm program, and generator_refs is a list as above
-    block_program_args = b"\xff" + bytes(clvm_deserializer) + bytes(generator_refs)
+    # Check that no requested block height index is greater than current height
+    if any( gr >= current_block_height for gr in generator_refs):
+        return None
 
-    # TODO: Open the database, and read in the generators, inserting them in a new list,
-    # in the order requested in the reference list
+    # Problem
+    full_block_list : List[FullBlock] = block_store.get_full_blocks_at(gen_refs)
 
-    # Note that if we fail to find a transaction block at the given height, we
-    # return a nil in that slot, so the program using these args is not given a list of
-    # a different length than expected.
-    # Or should we fail the entire thing?
+    if (len(full_block_list) != len(gen_ref_list)):
+        # We distinguish failure to find a generator a from nil generator_refs
+        # It is okay for a block to not have a generator reference list, but
+        # We choose not to send a partial list of requested generators to the
+        # requesting block_program
+        return None
 
-    return SerializedProgram.from_bytes(block_program_args)
+    # These are the bytes of the generators from the previous blocks
+    generator_list = [ fb.transactions_generator for fb in full_block_list ]
+
+    if None in generator_list:
+        # The user has requested the generator program from an invalid
+        # or non-transaction block. We fail early, instead of returning
+        # the valid generators, (e.g. converting missing generators to nil)
+        # to follow the principle of least astonishment
+        return None
+
+    # Insert clvm_deserializer as the 0th element in the block_program
+    # argument list, so the block_program can use it to access the
+    # (serialized) passed in generators
+    return Program.to(generator_list.insert(0, clvm_deserializer))
 
 
 def get_name_puzzle_conditions(
