@@ -3,10 +3,12 @@ from clvm_tools import binutils
 
 from src.types.blockchain_format.program import NilSerializedProgram, SerializedProgram
 from src.types.spend_bundle import SpendBundle
-from typing import Tuple
+from typing import Tuple, List
+
+from src.util.ints import uint32
 
 
-def best_solution_program(bundle: SpendBundle) -> Tuple[SerializedProgram, SerializedProgram]:
+def best_solution_program(bundle: SpendBundle) -> Tuple[SerializedProgram, List[uint32]]:
     """
     This could potentially do a lot of clever and complicated compression
     optimizations in conjunction with choosing the set of SpendBundles to include.
@@ -17,4 +19,4 @@ def best_solution_program(bundle: SpendBundle) -> Tuple[SerializedProgram, Seria
     for coin_solution in bundle.coin_solutions:
         entry = [coin_solution.coin.name(), [coin_solution.puzzle_reveal, coin_solution.solution]]
         r.append(entry)
-    return (SerializedProgram.from_bytes(SExp.to((binutils.assemble("#q"), r)).as_bin()), NilSerializedProgram)
+    return (SerializedProgram.from_bytes(SExp.to((binutils.assemble("#q"), r)).as_bin()), [])

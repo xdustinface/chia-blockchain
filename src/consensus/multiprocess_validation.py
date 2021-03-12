@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from src.consensus.block_header_validation import validate_finished_header_block
 from src.consensus.block_record import BlockRecord
+from src.consensus.block_runner import BlockRunner
 from src.consensus.blockchain_interface import BlockchainInterface
 from src.consensus.constants import ConsensusConstants
 from src.consensus.cost_calculator import CostResult, calculate_cost_of_program
@@ -57,7 +58,7 @@ def batch_pre_validate_blocks(
         try:
             header_block: HeaderBlock = HeaderBlock.from_bytes(header_blocks_pickled[i])
             generator: Optional[bytes] = transaction_generators[i]
-            generator_ref_list: Optional[bytes] = transaction_generator_lists[i]
+            prev_generator_list: Optional[bytes] = transaction_generator_lists[i]
             required_iters, error = validate_finished_header_block(
                 constants,
                 BlockCache(blocks),
@@ -74,12 +75,13 @@ def batch_pre_validate_blocks(
                 cost_result = None
             else:
                 if not error and generator is not None and validate_transactions:
-                    gen_refs = NilSerializedProgram
-                    if generator_ref_list is not None and len(generator_ref_list) > 0:
-                        gen_refs = SerializedProgram.from_bytes(generator_ref_list)
+                    prev_gens = []
+                    for gen in prev_generator_list:
+                        prev_gens.append(SerializedProgram.from_bytes(gen))
                     cost_result = calculate_cost_of_program(
                         SerializedProgram.from_bytes(generator),
-                        gen_refs,
+                        prev_gens,
+                        BlockRunner(0),
                         constants.CLVM_COST_RATIO_CONSTANT,
                         False,  # strict_mode=False
                     )

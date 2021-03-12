@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
+from src.consensus.block_runner import BlockRunner
 from src.consensus.condition_costs import ConditionCost
-from src.full_node.mempool_check_conditions import get_name_puzzle_conditions
-from src.types.blockchain_format.program import NilSerializedProgram, SerializedProgram
+from src.types.blockchain_format.program import SerializedProgram
 from src.types.condition_opcodes import ConditionOpcode
 from src.types.name_puzzle_condition import NPC
 from src.util.ints import uint16, uint64
@@ -20,7 +20,8 @@ class CostResult(Streamable):
 
 def calculate_cost_of_program(
     program: SerializedProgram,
-    generator_ref_list: Optional[SerializedProgram],
+    prev_generators: List[SerializedProgram],
+    block_runner: BlockRunner,
     clvm_cost_ratio_constant: int,
     strict_mode: bool,
 ) -> CostResult:
@@ -28,11 +29,10 @@ def calculate_cost_of_program(
     This function calculates the total cost of either a block or a spendbundle
     """
     total_clvm_cost = 0
-    # TODO: add cost for generator refs
-    gen_refs = NilSerializedProgram if generator_ref_list is None else generator_ref_list
-    error, npc_list, cost = get_name_puzzle_conditions(program, gen_refs, strict_mode)
+    error, npc_list, cost = block_runner.get_name_puzzle_conditions(program, prev_generators, strict_mode)
+
     if error:
-        raise Exception("get_name_puzzle_conditions raised error:" + str(error))
+        raise ValueError(error)
     total_clvm_cost += cost
 
     # Add cost of conditions

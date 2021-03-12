@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set
 
 from chiabip158 import PyBIP158
 
-from src.full_node.mempool_check_conditions import get_name_puzzle_conditions
 from src.types.announcement import Announcement
 from src.types.blockchain_format.coin import Coin
 from src.types.blockchain_format.foliage import Foliage, FoliageTransactionBlock, TransactionsInfo
@@ -15,6 +14,7 @@ from src.types.end_of_slot_bundle import EndOfSubSlotBundle
 from src.types.header_block import HeaderBlock
 from src.types.name_puzzle_condition import NPC
 from src.util.condition_tools import created_announcements_for_conditions_dict, created_outputs_for_conditions_dict
+from src.util.ints import uint32
 from src.util.streamable import Streamable, streamable
 
 
@@ -33,8 +33,8 @@ class FullBlock(Streamable):
     foliage_transaction_block: Optional[FoliageTransactionBlock]  # Reward chain foliage data (tx block)
     transactions_info: Optional[TransactionsInfo]  # Reward chain foliage data (tx block additional)
     transactions_generator: Optional[SerializedProgram]  # Program that generates transactions
-    transactions_generator_ref_list: Optional[
-        SerializedProgram
+    transactions_generator_ref_list: List[
+        uint32
     ]  # List of block heights of previous generators referenced in this block
 
     @property
@@ -60,13 +60,10 @@ class FullBlock(Streamable):
     def is_transaction_block(self):
         return self.foliage_transaction_block is not None
 
-    def get_block_header(self, addition_coins=None, removals_names=None) -> HeaderBlock:
+    def get_block_header(self, addition_coins, removals_names) -> HeaderBlock:
         # Create filter
         byte_array_tx: List[bytes32] = []
         if self.is_transaction_block():
-            if addition_coins is None or removals_names is None:
-                removals_names, addition_coins = self.tx_removals_and_additions()
-
             assert removals_names is not None
             assert addition_coins is not None
             for coin in addition_coins:
@@ -99,46 +96,6 @@ class FullBlock(Streamable):
             return set()
         assert self.transactions_info is not None
         return set(self.transactions_info.reward_claims_incorporated)
-
-    def additions(self) -> List[Coin]:
-        additions: List[Coin] = []
-
-        if self.transactions_generator is not None:
-            # This should never throw here, block must be valid if it comes to here
-            err, npc_list, cost = get_name_puzzle_conditions(
-                self.transactions_generator, self.transactions_generator_ref_list, False
-            )
-            # created coins
-            if npc_list is not None:
-                additions.extend(additions_for_npc(npc_list))
-
-        additions.extend(self.get_included_reward_coins())
-
-        return additions
-
-    def tx_removals_and_additions(self) -> Tuple[List[bytes32], List[Coin]]:
-        """
-        Doesn't return farmer and pool reward.
-        This call assumes that this block has been validated already,
-        get_name_puzzle_conditions should not return error here
-        """
-        removals: List[bytes32] = []
-        additions: List[Coin] = []
-
-        if self.transactions_generator is not None:
-            # This should never throw here, block must be valid if it comes to here
-            err, npc_list, cost = get_name_puzzle_conditions(
-                self.transactions_generator, self.transactions_generator_ref_list, False
-            )
-            # build removals list
-            if npc_list is None:
-                return [], []
-            for npc in npc_list:
-                removals.append(npc.coin_name)
-
-            additions.extend(additions_for_npc(npc_list))
-
-        return removals, additions
 
     def is_fully_compactified(self) -> bool:
         for sub_slot in self.finished_sub_slots:

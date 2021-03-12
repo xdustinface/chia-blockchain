@@ -8,10 +8,12 @@ from chiabip158 import PyBIP158
 
 from src.consensus.block_record import BlockRecord
 from src.consensus.block_rewards import calculate_base_farmer_reward, calculate_pool_reward
+from src.consensus.block_runner import BlockRunner
 from src.consensus.blockchain_interface import BlockchainInterface
 from src.consensus.coinbase import create_farmer_coin, create_pool_coin
 from src.consensus.constants import ConsensusConstants
 from src.consensus.cost_calculator import CostResult, calculate_cost_of_program
+from src.full_node import block_store
 from src.full_node.bundle_tools import best_solution_program
 from src.full_node.signage_point import SignagePoint
 from src.types.blockchain_format.coin import Coin, hash_coin_list
@@ -26,6 +28,7 @@ from src.types.end_of_slot_bundle import EndOfSubSlotBundle
 from src.types.full_block import FullBlock
 from src.types.spend_bundle import SpendBundle
 from src.types.unfinished_block import UnfinishedBlock
+from src.util.block_runner_utils import get_list_of_generators, get_list_of_generators_ref
 from src.util.hash import std_hash
 from src.util.ints import uint8, uint32, uint64, uint128
 from src.util.merkle_set import MerkleSet
@@ -47,6 +50,7 @@ def create_foliage(
     pool_target: PoolTarget,
     get_plot_signature: Callable[[bytes32, G1Element], G2Element],
     get_pool_signature: Callable[[PoolTarget, Optional[G1Element]], Optional[G2Element]],
+    block_runner: BlockRunner,
     seed: bytes32 = b"",
 ) -> Tuple[
     Foliage,
@@ -133,8 +137,9 @@ def create_foliage(
 
         # Calculate the cost of transactions
         if solution_program is not None:
+            prev_generators = get_list_of_generators_ref(generator_refs, block_store)
             result: CostResult = calculate_cost_of_program(
-                solution_program, generator_refs, constants.CLVM_COST_RATIO_CONSTANT, False
+                solution_program, prev_generators, block_runner, constants.CLVM_COST_RATIO_CONSTANT, False
             )  # Note: strict_mode == False
             cost = result.cost
             removal_amount = 0
@@ -290,6 +295,7 @@ def create_unfinished_block(
     signage_point: SignagePoint,
     timestamp: uint64,
     blocks: BlockchainInterface,
+    block_runner: BlockRunner,
     seed: bytes32 = b"",
     spend_bundle: Optional[SpendBundle] = None,
     additions: Optional[List[Coin]] = None,
@@ -396,6 +402,7 @@ def create_unfinished_block(
         pool_target,
         get_plot_signature,
         get_pool_signature,
+        block_runner,
         seed,
     )
 

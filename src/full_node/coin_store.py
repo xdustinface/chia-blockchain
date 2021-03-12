@@ -55,14 +55,13 @@ class CoinStore:
         self.coin_record_cache = dict()
         return self
 
-    async def new_block(self, block: FullBlock):
+    async def new_block(self, block: FullBlock, removals, additions):
         """
         Only called for blocks which are blocks (and thus have rewards and transactions)
         """
         if block.is_transaction_block() is False:
             return
         assert block.foliage_transaction_block is not None
-        removals, additions = block.tx_removals_and_additions()
 
         for coin in additions:
             record: CoinRecord = CoinRecord(

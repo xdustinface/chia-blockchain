@@ -75,13 +75,13 @@ class TestCostCalculation:
 
         ratio = test_constants.CLVM_COST_RATIO_CONSTANT
 
-        result: CostResult = calculate_cost_of_program(program, generator_refs, ratio, False)
+        result: CostResult = calculate_cost_of_program(program, [], ratio, False)
         clvm_cost = result.cost
 
-        error, npc_list, cost = get_name_puzzle_conditions(program, generator_refs, False)
+        error, npc_list, cost = get_name_puzzle_conditions(program, [], False)
         assert error is None
         coin_name = npc_list[0].coin_name
-        error, puzzle, solution = get_puzzle_and_solution_for_coin(program, generator_refs, coin_name)
+        error, puzzle, solution = get_puzzle_and_solution_for_coin(program, [], coin_name)
         assert error is None
 
         # Create condition + agg_sig_condition + length + cpu_cost
@@ -122,14 +122,13 @@ class TestCostCalculation:
                 f" ({disassembly} (() (q . ((65 '00000000000000000000000000000000' 0x0cbba106e000))) ())))))"
             ).as_bin()
         )
-        generator_refs_list = NilSerializedProgram
-        error, npc_list, cost = get_name_puzzle_conditions(program, generator_refs_list, True)
+        error, npc_list, cost = get_name_puzzle_conditions(program, [], True)
         assert error is not None
-        error, npc_list, cost = get_name_puzzle_conditions(program, generator_refs_list, False)
+        error, npc_list, cost = get_name_puzzle_conditions(program, [], False)
         assert error is None
 
         coin_name = npc_list[0].coin_name
-        error, puzzle, solution = get_puzzle_and_solution_for_coin(program, generator_refs_list, coin_name)
+        error, puzzle, solution = get_puzzle_and_solution_for_coin(program, [], coin_name)
         assert error is None
 
     @pytest.mark.asyncio
@@ -141,10 +140,9 @@ class TestCostCalculation:
         # ("0xfe"). In strict mode, this should fail, but in non-strict
         # mode, the unknown operator should be treated as if it returns ().
         program = SerializedProgram.from_bytes(binutils.assemble(f"(i (0xfe (q . 0)) (q . ()) {disassembly})").as_bin())
-        generator_refs_list = NilSerializedProgram
-        error, npc_list, cost = get_name_puzzle_conditions(program, generator_refs_list, True)
+        error, npc_list, cost = get_name_puzzle_conditions(program, [], True)
         assert error is not None
-        error, npc_list, cost = get_name_puzzle_conditions(program, generator_refs_list, False)
+        error, npc_list, cost = get_name_puzzle_conditions(program, [], False)
         assert error is None
 
     @pytest.mark.asyncio
@@ -152,10 +150,9 @@ class TestCostCalculation:
         LARGE_BLOCK_COIN_CONSUMED_COUNT = 687
         generator = large_block_generator(LARGE_BLOCK_COIN_CONSUMED_COUNT)
         program = SerializedProgram.from_bytes(generator)
-        generator_refs_list = NilSerializedProgram
 
         start_time = time.time()
-        err, npc, cost = get_name_puzzle_conditions(program, generator_refs_list, False)
+        err, npc, cost = get_name_puzzle_conditions(program, [], False)
         end_time = time.time()
         duration = end_time - start_time
         assert err is None

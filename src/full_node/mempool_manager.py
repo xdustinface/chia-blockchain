@@ -10,6 +10,7 @@ from blspy import AugSchemeMPL, G1Element
 from chiabip158 import PyBIP158
 
 from src.consensus.block_record import BlockRecord
+from src.consensus.block_runner import BlockRunner
 from src.consensus.constants import ConsensusConstants
 from src.consensus.cost_calculator import CostResult, calculate_cost_of_program
 from src.full_node.bundle_tools import best_solution_program
@@ -40,13 +41,14 @@ def validate_transaction_multiprocess(
 ) -> bytes:
     constants: ConsensusConstants = dataclass_from_dict(ConsensusConstants, constants_dict)
     # Calculate the cost and fees
-    program, generator_list = best_solution_program(SpendBundle.from_bytes(spend_bundle_bytes))
+    program, _ = best_solution_program(SpendBundle.from_bytes(spend_bundle_bytes))
     # npc contains names of the coins removed, puzzle_hashes and their spend conditions
-    return bytes(calculate_cost_of_program(program, generator_list, constants.CLVM_COST_RATIO_CONSTANT, True))
+    block_runner = BlockRunner(0)
+    return bytes(calculate_cost_of_program(program, [], block_runner, constants.CLVM_COST_RATIO_CONSTANT, True))
 
 
 class MempoolManager:
-    def __init__(self, coin_store: CoinStore, consensus_constants: ConsensusConstants):
+    def __init__(self, coin_store: CoinStore, consensus_constants: ConsensusConstants, block_runner: BlockRunner):
         self.constants: ConsensusConstants = consensus_constants
         self.constants_json = recurse_jsonify(dataclasses.asdict(self.constants))
 
@@ -66,6 +68,7 @@ class MempoolManager:
         self.potential_cache_size = 300
         self.seen_cache_size = 10000
         self.pool = ProcessPoolExecutor(max_workers=1)
+        self.blockRunner = block_runner
 
         # The mempool will correspond to a certain peak
         self.peak: Optional[BlockRecord] = None

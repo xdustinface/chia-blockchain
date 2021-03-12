@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from src.consensus.block_body_validation import validate_block_body
 from src.consensus.block_header_validation import validate_finished_header_block, validate_unfinished_header_block
 from src.consensus.block_record import BlockRecord
+from src.consensus.block_runner import BlockRunner
 from src.consensus.blockchain_interface import BlockchainInterface
 from src.consensus.constants import ConsensusConstants
 from src.consensus.difficulty_adjustment import get_next_sub_slot_iters_and_difficulty
@@ -76,6 +77,7 @@ class Blockchain(BlockchainInterface):
 
     # Lock to prevent simultaneous reads and writes
     lock: asyncio.Lock
+    block_runner: BlockRunner
 
     @staticmethod
     async def create(
@@ -101,6 +103,8 @@ class Blockchain(BlockchainInterface):
         self.coin_store = coin_store
         self.block_store = block_store
         self.constants_json = recurse_jsonify(dataclasses.asdict(self.constants))
+        self.block_runner = BlockRunner(100)
+
         self._shut_down = False
         await self._load_chain_from_store()
         self._seen_compact_proofs = set()
@@ -213,6 +217,7 @@ class Blockchain(BlockchainInterface):
             self.constants,
             self,
             self.block_store,
+            self.block_runner,
             self.coin_store,
             self.get_peak(),
             block,
@@ -261,7 +266,8 @@ class Blockchain(BlockchainInterface):
                 # in sync.
                 await self.block_store.begin_transaction()
                 try:
-                    await self.coin_store.new_block(block)
+                    removals, additions = self.block_runner.get_removals_and_additions(self.block_store, block)
+                    await self.coin_store.new_block(block, removals, additions)
                     self.__height_to_hash[uint32(0)] = block.header_hash
                     self._peak_height = uint32(0)
                     await self.block_store.set_peak(block.header_hash)
@@ -605,7 +611,8 @@ class Blockchain(BlockchainInterface):
         block = await self.block_store.get_full_block(header_hash)
         if block is None:
             return None
-        return block.get_block_header()
+        removals, additions = self.block_runner.get_removals_and_additions(self.block_store, block)
+        return block.get_block_header(removals, additions)
 
     async def persist_sub_epoch_challenge_segments(
         self, sub_epoch_summary_height: uint32, segments: List[SubEpochChallengeSegment]

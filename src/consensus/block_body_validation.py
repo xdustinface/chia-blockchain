@@ -9,6 +9,7 @@ from clvm.casts import int_from_bytes
 from src.consensus.block_record import BlockRecord
 from src.consensus.block_rewards import calculate_base_farmer_reward, calculate_pool_reward
 from src.consensus.block_root_validation import validate_block_merkle_roots
+from src.consensus.block_runner import BlockRunner
 from src.consensus.blockchain_check_conditions import blockchain_check_conditions_dict
 from src.consensus.blockchain_interface import BlockchainInterface
 from src.consensus.coinbase import create_farmer_coin, create_pool_coin
@@ -27,6 +28,7 @@ from src.types.condition_var_pair import ConditionVarPair
 from src.types.full_block import FullBlock, additions_for_npc, announcements_for_npc
 from src.types.name_puzzle_condition import NPC
 from src.types.unfinished_block import UnfinishedBlock
+from src.util.block_runner_utils import get_list_of_generators
 from src.util.condition_tools import pkm_pairs_for_conditions_dict
 from src.util.errors import Err
 from src.util.hash import std_hash
@@ -39,6 +41,7 @@ async def validate_block_body(
     constants: ConsensusConstants,
     blocks: BlockchainInterface,
     block_store: BlockStore,
+    block_runner: BlockRunner,
     coin_store: CoinStore,
     peak: Optional[BlockRecord],
     block: Union[FullBlock, UnfinishedBlock],
@@ -173,9 +176,11 @@ async def validate_block_body(
             if cached_cost_result is not None:
                 result: Optional[CostResult] = cached_cost_result
             else:
+                prev_generators = get_list_of_generators(block, block_store)
                 result = calculate_cost_of_program(
                     block.transactions_generator,
-                    block.transactions_generator_ref_list,
+                    prev_generators,
+                    block_runner,
                     constants.CLVM_COST_RATIO_CONSTANT,
                     False,
                 )  # Note: strict_mode == False
@@ -272,7 +277,7 @@ async def validate_block_body(
             assert curr is not None
 
             while curr.height > fork_h:
-                removals_in_curr, additions_in_curr = curr.tx_removals_and_additions()
+                removals_in_curr, additions_in_curr = block_runner.get_removals_and_additions(block_store, block)
                 for c_name in removals_in_curr:
                     removals_since_fork.add(c_name)
                 for c in additions_in_curr:

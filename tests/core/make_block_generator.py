@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import blspy
 
@@ -8,7 +8,7 @@ from src.types.blockchain_format.program import Program, SerializedProgram
 from src.types.coin_solution import CoinSolution
 from src.types.condition_opcodes import ConditionOpcode
 from src.types.spend_bundle import SpendBundle
-from src.util.ints import uint64
+from src.util.ints import uint64, uint32
 from src.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import puzzle_for_pk, solution_for_conditions
 
 GROUP_ORDER = 0x73EDA753299D7D483339D80809A1D80553BDA402FFFE5BFEFFFFFFFF00000001
@@ -45,7 +45,7 @@ def conditions_for_payment(coin) -> Program:
     return Program.to([[ConditionOpcode.CREATE_COIN, new_puzzle_hash, coin.amount]])
 
 
-def make_block_generator_and_gen_ref_list(count: int) -> Tuple[SerializedProgram, SerializedProgram]:
+def make_block_generator_and_gen_ref_list(count: int) -> Tuple[SerializedProgram, List[uint32]]:
     puzzle_hash_db: Dict = dict()
     coins = [make_fake_coin(_, puzzle_hash_db) for _ in range(count)]
 

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from blspy import AugSchemeMPL, G2Element
 
+from src.consensus.block_runner import BlockRunner
 from src.consensus.cost_calculator import CostResult, calculate_cost_of_program
 from src.full_node.bundle_tools import best_solution_program
 from src.protocols.wallet_protocol import PuzzleSolutionResponse
@@ -241,10 +242,10 @@ class CCWallet:
             tx = await self.generate_signed_transaction(
                 [coin.amount], [coin.puzzle_hash], coins={coin}, ignore_max_send_amount=True
             )
-            program, gen_ref_list = best_solution_program(tx.spend_bundle)
+            program, _ = best_solution_program(tx.spend_bundle)
             # npc contains names of the coins removed, puzzle_hashes and their spend conditions
             cost_result: CostResult = calculate_cost_of_program(
-                program, gen_ref_list, self.wallet_state_manager.constants.CLVM_COST_RATIO_CONSTANT, True
+                program, [], BlockRunner(0), self.wallet_state_manager.constants.CLVM_COST_RATIO_CONSTANT, True
             )
             self.cost_of_single_tx = cost_result.cost
             self.log.info(f"Cost of a single tx for standard wallet: {self.cost_of_single_tx}")

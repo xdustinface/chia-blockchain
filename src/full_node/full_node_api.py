@@ -919,7 +919,9 @@ class FullNodeAPI:
             return msg
 
         assert block is not None and block.foliage_transaction_block is not None
-        _, additions = block.tx_removals_and_additions()
+        _, additions = self.full_node.blockchain.block_runner.get_removals_and_additions(
+            self.full_node.blockchain.block_store, block
+        )
         puzzlehash_coins_map: Dict[bytes32, List[Coin]] = {}
         for coin in additions + list(block.get_included_reward_coins()):
             if coin.puzzle_hash in puzzlehash_coins_map:
@@ -975,7 +977,9 @@ class FullNodeAPI:
             return msg
 
         assert block is not None and block.foliage_transaction_block is not None
-        all_removals, _ = block.tx_removals_and_additions()
+        all_removals, _ = self.full_node.blockchain.block_runner.get_removals_and_additions(
+            self.full_node.blockchain.block_store, block
+        )
 
         coins_map: List[Tuple[bytes32, Optional[Coin]]] = []
         proofs_map: List[Tuple[bytes32, bytes]] = []
@@ -1048,8 +1052,9 @@ class FullNodeAPI:
         if block is None or block.transactions_generator is None:
             return reject_msg
 
-        error, puzzle, solution = get_puzzle_and_solution_for_coin(
-            block.transactions_generator, block.transactions_generator_ref_list, coin_name
+        block_store = self.full_node.blockchain.block_store
+        error, puzzle, solution = await self.full_node.blockchain.block_runner.get_puzzle_solution_for_single_coin(
+            block_store, block, coin_name
         )
 
         if error is not None:

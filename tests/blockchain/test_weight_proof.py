@@ -7,6 +7,7 @@ import aiosqlite
 import pytest
 
 from src.consensus.block_record import BlockRecord
+from src.consensus.block_runner import BlockRunner
 from src.consensus.default_constants import DEFAULT_CONSTANTS
 from src.consensus.full_block_to_block_record import block_to_block_record
 from src.full_node.block_store import BlockStore
@@ -117,7 +118,7 @@ async def load_blocks_dont_validate(
         )
         sub_blocks[block.header_hash] = sub_block
         height_to_hash[block.height] = block.header_hash
-        header_cache[block.header_hash] = block.get_block_header()
+        header_cache[block.header_hash] = block.get_block_header(list(block.get_included_reward_coins()), [])
         if sub_block.sub_epoch_summary_included is not None:
             sub_epoch_summaries[block.height] = sub_block.sub_epoch_summary_included
         prev_block = block

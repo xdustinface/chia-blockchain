@@ -8,6 +8,7 @@ import pytest
 from src.consensus.block_rewards import calculate_base_farmer_reward, calculate_pool_reward
 from src.consensus.blockchain import Blockchain, ReceiveBlockResult
 from src.consensus.coinbase import create_farmer_coin, create_pool_coin
+from src.consensus.full_block_to_block_record import block_to_block_record
 from src.full_node.block_store import BlockStore
 from src.full_node.coin_store import CoinStore
 from src.types.blockchain_format.coin import Coin
@@ -93,30 +94,33 @@ class TestCoinStore:
             should_be_included.add(farmer_coin)
             should_be_included.add(pool_coin)
             if block.is_transaction_block():
-                removals, additions = block.tx_removals_and_additions()
+                removals = spend_bundle.removal_names()
+                additions = spend_bundle.additions()
+            else:
+                removals = []
+                additions = []
+            assert block.get_included_reward_coins() == should_be_included_prev
 
-                assert block.get_included_reward_coins() == should_be_included_prev
+            await coin_store.new_block(block, removals, additions)
 
-                await coin_store.new_block(block)
+            for expected_coin in should_be_included_prev:
+                # Check that the coinbase rewards are added
+                record = await coin_store.get_coin_record(expected_coin.name())
+                assert record is not None
+                assert not record.spent
+                assert record.coin == expected_coin
+            for coin_name in removals:
+                # Check that the removed coins are set to spent
+                record = await coin_store.get_coin_record(coin_name)
+                assert record.spent
+            for coin in additions:
+                # Check that the added coins are added
+                record = await coin_store.get_coin_record(coin.name())
+                assert not record.spent
+                assert coin == record.coin
 
-                for expected_coin in should_be_included_prev:
-                    # Check that the coinbase rewards are added
-                    record = await coin_store.get_coin_record(expected_coin.name())
-                    assert record is not None
-                    assert not record.spent
-                    assert record.coin == expected_coin
-                for coin_name in removals:
-                    # Check that the removed coins are set to spent
-                    record = await coin_store.get_coin_record(coin_name)
-                    assert record.spent
-                for coin in additions:
-                    # Check that the added coins are added
-                    record = await coin_store.get_coin_record(coin.name())
-                    assert not record.spent
-                    assert coin == record.coin
-
-                should_be_included_prev = should_be_included.copy()
-                should_be_included = set()
+            should_be_included_prev = should_be_included.copy()
+            should_be_included = set()
 
         await connection.close()
         Path("fndb_test.db").unlink()
@@ -134,7 +138,7 @@ class TestCoinStore:
         # Save/get block
         for block in blocks:
             if block.is_transaction_block():
-                await coin_store.new_block(block)
+                await coin_store.new_block(block, [], [])
                 coins = block.get_included_reward_coins()
                 records = [await coin_store.get_coin_record(coin.name()) for coin in coins]
 
@@ -161,7 +165,7 @@ class TestCoinStore:
 
         for block in blocks:
             if block.is_transaction_block():
-                await coin_store.new_block(block)
+                await coin_store.new_block(block, [], [])
                 coins = block.get_included_reward_coins()
                 records: List[Optional[CoinRecord]] = [await coin_store.get_coin_record(coin.name()) for coin in coins]
 

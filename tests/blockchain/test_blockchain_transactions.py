@@ -1,14 +1,18 @@
 import asyncio
 import logging
+from typing import List
 
 import pytest
 from clvm.casts import int_to_bytes
 
 from src.consensus.blockchain import ReceiveBlockResult
+from src.full_node.mempool_check_conditions import get_name_puzzle_conditions
 from src.protocols import full_node_protocol
 from src.types.announcement import Announcement
+from src.types.blockchain_format.coin import Coin
 from src.types.condition_opcodes import ConditionOpcode
 from src.types.condition_var_pair import ConditionVarPair
+from src.types.full_block import FullBlock, additions_for_npc
 from src.types.spend_bundle import SpendBundle
 from src.util.errors import ConsensusError, Err
 from src.util.ints import uint64
@@ -28,6 +32,21 @@ log = logging.getLogger(__name__)
 def event_loop():
     loop = asyncio.get_event_loop()
     yield loop
+
+
+def additions(block: FullBlock) -> List[Coin]:
+    additions: List[Coin] = []
+
+    if block.transactions_generator is not None:
+        # This should never throw here, block must be valid if it comes to here
+        err, npc_list, cost = get_name_puzzle_conditions(block.transactions_generator, [], False)
+        # created coins
+        if npc_list is not None:
+            additions.extend(additions_for_npc(npc_list))
+
+    additions.extend(block.get_included_reward_coins())
+
+    return additions
 
 
 class TestBlockchainTransactions:
@@ -325,7 +344,7 @@ class TestBlockchainTransactions:
         await full_node_api_1.full_node.respond_block(full_node_protocol.RespondBlock(new_blocks[-1]))
 
         coin_2 = None
-        for coin in new_blocks[-1].additions():
+        for coin in additions(new_blocks[-1]):
             if coin.puzzle_hash == receiver_1_puzzlehash:
                 coin_2 = coin
                 break
@@ -344,7 +363,7 @@ class TestBlockchainTransactions:
         await full_node_api_1.full_node.respond_block(full_node_protocol.RespondBlock(new_blocks[-1]))
 
         coin_3 = None
-        for coin in new_blocks[-1].additions():
+        for coin in additions(new_blocks[-1]):
             if coin.puzzle_hash == receiver_2_puzzlehash:
                 coin_3 = coin
                 break
@@ -364,7 +383,7 @@ class TestBlockchainTransactions:
         await full_node_api_1.full_node.respond_block(full_node_protocol.RespondBlock(new_blocks[-1]))
 
         coin_4 = None
-        for coin in new_blocks[-1].additions():
+        for coin in additions(new_blocks[-1]):
             if coin.puzzle_hash == receiver_3_puzzlehash:
                 coin_4 = coin
                 break
@@ -414,7 +433,7 @@ class TestBlockchainTransactions:
         await full_node_api_1.full_node.respond_block(full_node_protocol.RespondBlock(new_blocks[-1]))
 
         coins_created = []
-        for coin in new_blocks[-1].additions():
+        for coin in additions(new_blocks[-1]):
             if coin.puzzle_hash == receiver_1_puzzlehash:
                 coins_created.append(coin)
         assert len(coins_created) == 1

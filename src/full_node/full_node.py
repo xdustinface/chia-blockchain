@@ -13,6 +13,7 @@ from blspy import AugSchemeMPL
 import src.server.ws_connection as ws  # lgtm [py/import-and-import-from]
 from src.consensus.block_creation import unfinished_block_to_full_block
 from src.consensus.block_record import BlockRecord
+from src.consensus.block_runner import BlockRunner
 from src.consensus.blockchain import Blockchain, ReceiveBlockResult
 from src.consensus.constants import ConsensusConstants
 from src.consensus.difficulty_adjustment import get_next_sub_slot_iters_and_difficulty
@@ -110,7 +111,7 @@ class FullNode:
         self.log.info("Initializing blockchain from disk")
         start_time = time.time()
         self.blockchain = await Blockchain.create(self.coin_store, self.block_store, self.constants)
-        self.mempool_manager = MempoolManager(self.coin_store, self.constants)
+        self.mempool_manager = MempoolManager(self.coin_store, self.constants, self.blockchain.block_runner)
         self.weight_proof_handler = WeightProofHandler(self.constants, self.blockchain)
         self._sync_task = None
         time_taken = time.time() - start_time

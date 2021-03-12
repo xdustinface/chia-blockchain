@@ -378,7 +378,8 @@ class FullNodeRpcApi:
         reward_additions = block.get_included_reward_coins()
 
         # TODO: optimize
-        tx_removals, tx_additions = block.tx_removals_and_additions()
+        block_store = self.service.blockchain.block_store
+        tx_removals, tx_additions = self.service.blockchain.block_runner.get_removals_and_additions(block_store, block)
         removal_records = []
         addition_records = []
         for tx_removal in tx_removals:
