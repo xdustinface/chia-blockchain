@@ -18,6 +18,7 @@ from src.consensus.constants import ConsensusConstants
 from src.consensus.difficulty_adjustment import get_next_sub_slot_iters_and_difficulty
 from src.consensus.make_sub_epoch_summary import next_sub_epoch_summary
 from src.consensus.multiprocess_validation import PreValidationResult
+from src.consensus.network_type import NetworkType
 from src.consensus.pot_iterations import calculate_sp_iters
 from src.full_node.block_store import BlockStore
 from src.full_node.coin_store import CoinStore
@@ -1340,7 +1341,9 @@ class FullNode:
         peak_height = self.blockchain.get_peak_height()
         if peak_height is None or peak_height <= self.constants.INITIAL_FREEZE_PERIOD:
             return MempoolInclusionStatus.FAILED, Err.INITIAL_TRANSACTION_FREEZE
-
+        # TODO Remove this in soft fork
+        if self.constants.NETWORK_TYPE is NetworkType.MAINNET:
+            return MempoolInclusionStatus.FAILED, Err.INITIAL_TRANSACTION_FREEZE
         if self.mempool_manager.seen(spend_name):
             return MempoolInclusionStatus.FAILED, Err.ALREADY_INCLUDING_TRANSACTION
         self.mempool_manager.add_and_maybe_pop_seen(spend_name)
