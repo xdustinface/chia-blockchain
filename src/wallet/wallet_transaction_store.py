@@ -93,7 +93,7 @@ class WalletTransactionStore:
             "INSERT OR REPLACE INTO transaction_record VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 bytes(record),
-                record.name,
+                record.name.hex(),
                 record.confirmed_at_height,
                 record.created_at_time,
                 record.to_puzzle_hash.hex(),
