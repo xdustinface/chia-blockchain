@@ -210,24 +210,17 @@ class CCWallet:
         self.log.info(f"Confirmed balance for cc wallet {self.id()} is {amount}")
         return uint64(amount)
 
-    async def get_unconfirmed_balance(self, unspent_records=None) -> uint128:
-        confirmed = await self.get_confirmed_balance(unspent_records)
+    async def get_unconfirmed_balance(self) -> uint128:
         unconfirmed_tx: List[TransactionRecord] = await self.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(
             self.id()
         )
-        addition_amount = 0
-        removal_amount = 0
+        unconfirmed_amount = 0
 
         for record in unconfirmed_tx:
-            if record.type is TransactionType.INCOMING_TX:
-                addition_amount += record.amount
-            else:
-                removal_amount += record.amount
+            unconfirmed_amount += record.amount
 
-        result = confirmed - removal_amount + addition_amount
-
-        self.log.info(f"Unconfirmed balance for cc wallet {self.id()} is {result}")
-        return uint128(result)
+        self.log.info(f"Unconfirmed balance for cc wallet {self.id()} is {unconfirmed_amount}")
+        return uint128(unconfirmed_amount)
 
     async def get_max_send_amount(self, records=None):
         spendable: List[WalletCoinRecord] = list(

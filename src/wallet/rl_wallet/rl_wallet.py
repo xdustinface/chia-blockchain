@@ -340,8 +340,8 @@ class RLWallet:
     async def get_confirmed_balance(self, unspent_records=None) -> uint128:
         return await self.wallet_state_manager.get_confirmed_balance_for_wallet(self.id(), unspent_records)
 
-    async def get_unconfirmed_balance(self, unspent_records=None) -> uint128:
-        return await self.wallet_state_manager.get_unconfirmed_balance(self.id(), unspent_records)
+    async def get_unconfirmed_balance(self) -> uint128:
+        return await self.wallet_state_manager.get_unconfirmed_balance(self.id())
 
     async def get_spendable_balance(self, unspent_records=None) -> uint128:
         spendable_am = await self.wallet_state_manager.get_confirmed_spendable_balance_for_wallet(self.id())

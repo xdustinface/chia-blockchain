@@ -439,24 +439,18 @@ class WalletStateManager:
         self.log.info(f"Confirmed balance amount is {amount}")
         return uint128(amount)
 
-    async def get_unconfirmed_balance(
-        self, wallet_id, unspent_coin_records: Optional[Set[WalletCoinRecord]] = None
-    ) -> uint128:
+    async def get_unconfirmed_balance(self, wallet_id) -> uint128:
         """
-        Returns the balance, including coinbase rewards that are not spendable, and unconfirmed
-        transactions.
+        Returns the unconfirmed balance for wallet_id.
         """
-        confirmed = await self.get_confirmed_balance_for_wallet(wallet_id, unspent_coin_records)
         unconfirmed_tx: List[TransactionRecord] = await self.tx_store.get_unconfirmed_for_wallet(wallet_id)
-        removal_amount = 0
+        unconfirmed_amount = 0
 
         for record in unconfirmed_tx:
+            if record.type == TransactionType.INCOMING_TX:
+                unconfirmed_amount += record.amount
 
-            removal_amount += record.amount
-            removal_amount += record.fee_amount
-
-        result = confirmed - removal_amount
-        return uint128(result)
+        return uint128(unconfirmed_amount)
 
     async def unconfirmed_additions_for_wallet(self, wallet_id: int) -> Dict[bytes32, Coin]:
         """
