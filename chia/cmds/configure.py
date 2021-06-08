@@ -99,23 +99,32 @@ def configure(
             print("Please choose True or False")
             return 1
 
-        config["full_node"]["port"] = full_node_port
-        config["full_node"]["introducer_peer"]["port"] = full_node_port
         config["farmer"]["full_node_peer"]["port"] = full_node_port
+        config["farmer"]["selected_network"] = selected_network
+
+        config["full_node"]["port"] = full_node_port
+        config["full_node"]["introducer_peer"]["host"] = introducer
+        config["full_node"]["introducer_peer"]["port"] = full_node_port
+        config["full_node"]["selected_network"] = selected_network
+
+        config["harvester"]["selected_network"] = selected_network
+
+        config["introducer"]["port"] = full_node_port
+        config["introducer"]["selected_network"] = selected_network
+
+        config["pool"]["selected_network"] = selected_network
+
         config["timelord"]["full_node_peer"]["port"] = full_node_port
+        config["timelord"]["selected_network"] = selected_network
+
+        config["ui"]["selected_network"] = selected_network
+
         config["wallet"]["full_node_peer"]["port"] = full_node_port
         config["wallet"]["introducer_peer"]["port"] = full_node_port
-        config["introducer"]["port"] = full_node_port
-        config["full_node"]["introducer_peer"]["host"] = introducer
-        config["selected_network"] = selected_network
-        config["harvester"]["selected_network"] = selected_network
-        config["pool"]["selected_network"] = selected_network
-        config["farmer"]["selected_network"] = selected_network
-        config["timelord"]["selected_network"] = selected_network
-        config["full_node"]["selected_network"] = selected_network
-        config["ui"]["selected_network"] = selected_network
-        config["introducer"]["selected_network"] = selected_network
         config["wallet"]["selected_network"] = selected_network
+
+        config["selected_network"] = selected_network
+
         print("Default full node port, introducer and network setting updated")
         change_made = True
 
