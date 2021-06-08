@@ -84,13 +84,40 @@ def configure(
         change_made = True
     if testnet is not None:
 
+        daemon_port = 55400
+        farmer_port = 8447
+        farmer_rpc_port = 8559
+        harvester_port = 8448
+        harvester_rpc_port = 8560
         full_node_port = 8444
+        full_node_rpc_port = 8555
+        introducer_port = 8445
+        wallet_port = 8449
+        wallet_rpc_port = 9256
+        timelord_launcher_port = 8000
+        timelord_port = 8446
+        ui_port = 8222
+
         introducer = "introducer.chia.net"
         selected_network = "mainnet"
 
         if testnet == "true" or testnet == "t":
             print("Setting Testnet")
+
+            daemon_port = 55401
+            farmer_port = 58447
+            farmer_rpc_port = 58559
+            harvester_port = 58448
+            harvester_rpc_port = 58560
             full_node_port = 58444
+            full_node_rpc_port = 58555
+            introducer_port = 58445
+            wallet_port = 58449
+            wallet_rpc_port = 59256
+            timelord_launcher_port = 58000
+            timelord_port = 58446
+            ui_port = 58222
+
             introducer = "beta1_introducer.chia.net"
             selected_network = "testnet7"
         elif testnet == "false" or testnet == "f":
@@ -99,28 +126,49 @@ def configure(
             print("Please choose True or False")
             return 1
 
+        config["daemon_port"] = daemon_port
+
+        config["farmer"]["port"] = farmer_port
+        config["farmer"]["rpc_port"] = farmer_rpc_port
         config["farmer"]["full_node_peer"]["port"] = full_node_port
+        config["farmer"]["harvester_peer"]["port"] = harvester_port
         config["farmer"]["selected_network"] = selected_network
 
         config["full_node"]["port"] = full_node_port
+        config["full_node"]["rpc_port"] = full_node_rpc_port
+        config["full_node"]["farmer_peer"]["port"] = farmer_port
         config["full_node"]["introducer_peer"]["host"] = introducer
         config["full_node"]["introducer_peer"]["port"] = full_node_port
+        config["full_node"]["timelord_peer"]["port"] = timelord_port
+        config["full_node"]["wallet_peer"]["port"] = wallet_port
         config["full_node"]["selected_network"] = selected_network
 
+        config["harvester"]["port"] = harvester_port
+        config["harvester"]["rpc_port"] = harvester_rpc_port
+        config["harvester"]["farmer_peer"]["port"] = farmer_port
         config["harvester"]["selected_network"] = selected_network
 
-        config["introducer"]["port"] = full_node_port
+        config["introducer"]["port"] = introducer_port
         config["introducer"]["selected_network"] = selected_network
 
         config["pool"]["selected_network"] = selected_network
 
+        config["timelord"]["port"] = timelord_port
         config["timelord"]["full_node_peer"]["port"] = full_node_port
+        config["timelord"]["vdf_server"]["port"] = timelord_launcher_port
         config["timelord"]["selected_network"] = selected_network
 
+        config["timelord_launcher"]["port"] = timelord_launcher_port
+
+        config["ui"]["daemon_port"] = daemon_port
+        config["ui"]["port"] = ui_port
+        config["ui"]["rpc_port"] = full_node_rpc_port
         config["ui"]["selected_network"] = selected_network
 
+        config["wallet"]["port"] = wallet_port
+        config["wallet"]["rpc_port"] = wallet_rpc_port
         config["wallet"]["full_node_peer"]["port"] = full_node_port
-        config["wallet"]["introducer_peer"]["port"] = full_node_port
+        config["wallet"]["introducer_peer"]["port"] = introducer_port
         config["wallet"]["selected_network"] = selected_network
 
         config["selected_network"] = selected_network
