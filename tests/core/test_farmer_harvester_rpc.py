@@ -8,6 +8,7 @@ from chiapos import DiskPlotter
 
 from chia.consensus.coinbase import create_puzzlehash_for_pk
 from chia.plotting.util import stream_plot_info_ph, stream_plot_info_pk, PlotRefreshResult
+from chia.plotting.manager import PlotManager
 from chia.protocols import farmer_protocol
 from chia.rpc.farmer_rpc_api import FarmerRpcApi
 from chia.rpc.farmer_rpc_client import FarmerRpcClient
@@ -198,6 +199,7 @@ class TestRpc:
                 await time_out_assert(5, harvester.plot_manager.needs_refresh, value=False)
                 result = await client_2.get_plots()
                 assert len(result["plots"]) == expect_total_plots
+                assert len(harvester.plot_manager.cache) == expect_total_plots
 
             # Add plot_dir with two new plots
             await test_case(
@@ -290,6 +292,61 @@ class TestRpc:
                 expected_directories=1,
                 expect_total_plots=0,
             )
+            # Recover the plots to test caching
+            await test_case(
+                client_2.add_plot_directory(str(get_plot_dir())),
+                expect_loaded=20,
+                expect_removed=0,
+                expect_processed=20,
+                expected_directories=2,
+                expect_total_plots=20,
+            )
+            # Make sure `PlotManager` caching works as expected
+            harvester.plot_manager.stop_refreshing()
+            assert harvester.plot_manager.cache_path().exists()
+
+            expected_result.loaded_plots = 20
+            expected_result.removed_plots = 0
+            expected_result.processed_files = 20
+            expected_result.remaining_files = 0
+            plot_manager: PlotManager = PlotManager(harvester.root_path, test_refresh_callback)
+            plot_manager.start_refreshing()
+            assert len(harvester.plot_manager.cache) == len(plot_manager.cache)
+            await time_out_assert(5, plot_manager.needs_refresh, value=False)
+            for path, plot_info in harvester.plot_manager.plots.items():
+                assert path in plot_manager.plots
+                assert plot_manager.plots[path].prover.get_filename() == plot_info.prover.get_filename()
+                assert plot_manager.plots[path].prover.get_id() == plot_info.prover.get_id()
+                assert plot_manager.plots[path].prover.get_memo() == plot_info.prover.get_memo()
+                assert plot_manager.plots[path].prover.get_size() == plot_info.prover.get_size()
+                assert plot_manager.plots[path].pool_public_key == plot_info.pool_public_key
+                assert plot_manager.plots[path].pool_contract_puzzle_hash == plot_info.pool_contract_puzzle_hash
+                assert plot_manager.plots[path].plot_public_key == plot_info.plot_public_key
+                assert plot_manager.plots[path].file_size == plot_info.file_size
+                assert plot_manager.plots[path].time_modified == plot_info.time_modified
+
+            assert harvester.plot_manager.plot_filename_paths == plot_manager.plot_filename_paths
+            assert harvester.plot_manager.failed_to_open_filenames == plot_manager.failed_to_open_filenames
+            assert harvester.plot_manager.no_key_filenames == plot_manager.no_key_filenames
+            plot_manager.stop_refreshing()
+            # Modify the content of the plot_manager.dat
+            with open(harvester.plot_manager.cache_path(), "r+b") as file:
+                file.write(b"\x00\x00")  # Sets Cache.version to 0
+            # Make sure it just loads the plots normally if it fails to load the cache
+            plot_manager = PlotManager(harvester.root_path, test_refresh_callback)
+            plot_manager.load_cache()
+            assert len(plot_manager.cache) == 0
+            plot_manager.set_public_keys(
+                harvester.plot_manager.farmer_public_keys, harvester.plot_manager.pool_public_keys
+            )
+            expected_result.loaded_plots = 20
+            expected_result.removed_plots = 0
+            expected_result.processed_files = 20
+            expected_result.remaining_files = 0
+            plot_manager.start_refreshing()
+            await time_out_assert(5, plot_manager.needs_refresh, value=False)
+            assert len(plot_manager.plots) == len(harvester.plot_manager.plots)
+            plot_manager.stop_refreshing()
 
             targets_1 = await client.get_reward_targets(False)
             assert "have_pool_sk" not in targets_1

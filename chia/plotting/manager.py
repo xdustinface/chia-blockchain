@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import logging
 import threading
 import time
@@ -21,11 +22,30 @@ from chia.plotting.util import (
     stream_plot_info_pk,
     stream_plot_info_ph,
 )
+from chia.util.ints import int16
+from chia.util.streamable import Streamable, streamable
 from chia.types.blockchain_format.proof_of_space import ProofOfSpace
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.wallet.derive_keys import master_sk_to_local_sk
 
 log = logging.getLogger(__name__)
+
+CURRENT_VERSION: int16 = int16(1)
+
+
+@dataclass(frozen=True)
+@streamable
+class CacheEntry(Streamable):
+    pool_public_key: Optional[G1Element]
+    pool_contract_puzzle_hash: Optional[bytes32]
+    plot_public_key: G1Element
+
+
+@dataclass(frozen=True)
+@streamable
+class DiskCache(Streamable):
+    version: int16
+    data: List[Tuple[bytes32, CacheEntry]]
 
 
 class PlotManager:
@@ -36,6 +56,7 @@ class PlotManager:
     no_key_filenames: Set[Path]
     farmer_public_keys: List[G1Element]
     pool_public_keys: List[G1Element]
+    cache: Dict[bytes32, CacheEntry]
     match_str: Optional[str]
     show_memo: bool
     open_no_key_filenames: bool
@@ -64,6 +85,7 @@ class PlotManager:
         self.no_key_filenames = set()
         self.farmer_public_keys = []
         self.pool_public_keys = []
+        self.cache = {}
         self.match_str = match_str
         self.show_memo = show_memo
         self.open_no_key_filenames = open_no_key_filenames
@@ -80,6 +102,32 @@ class PlotManager:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self._lock.release()
+
+    def cache_path(self):
+        return Path(self.root_path / "plot_manager.dat")
+
+    def load_cache(self):
+        try:
+            serialized = self.cache_path().read_bytes()
+            self.log.info(f"Loaded {len(serialized)} bytes of cached data")
+            stored_cache: DiskCache = DiskCache.from_bytes(serialized)
+            if stored_cache.version < CURRENT_VERSION:
+                # TODO, Migrate or drop current cache if the version changes.
+                raise ValueError(f"Invalid cache version {stored_cache.version}. Expected minimum {CURRENT_VERSION}.")
+            self.cache = {plot_id: cache_entry for plot_id, cache_entry in stored_cache.data}
+        except Exception as e:
+            self.log.error(f"Failed to load cache: {e}, {traceback.format_exc()}")
+
+    def save_cache(self):
+        try:
+            disk_cache: DiskCache = DiskCache(
+                CURRENT_VERSION, [(plot_id, cache_entry) for plot_id, cache_entry in self.cache.items()]
+            )
+            serialized: bytes = bytes(disk_cache)
+            self.cache_path().write_bytes(serialized)
+            self.log.info(f"Saved {len(serialized)} bytes of cached data")
+        except Exception as e:
+            self.log.error(f"Failed to save cache: {e}, {traceback.format_exc()}")
 
     def set_refresh_callback(self, callback: Callable):
         self._refresh_callback = callback  # type: ignore
@@ -99,6 +147,7 @@ class PlotManager:
         return time.time() - self.last_refresh_time > float(self.refresh_parameter.interval_seconds)
 
     def start_refreshing(self):
+        self.load_cache()
         self._refreshing_enabled = True
         if self._refresh_thread is None or not self._refresh_thread.is_alive():
             self._refresh_thread = threading.Thread(target=self._refresh_task)
@@ -109,6 +158,7 @@ class PlotManager:
         if self._refresh_thread is not None and self._refresh_thread.is_alive():
             self._refresh_thread.join()
             self._refresh_thread = None
+        self.save_cache()
 
     def trigger_refresh(self):
         log.debug("trigger_refresh")
@@ -131,6 +181,19 @@ class PlotManager:
                 batch_sleep = self.refresh_parameter.batch_sleep_milliseconds
                 self.log.debug(f"refresh_plots: Sleep {batch_sleep} milliseconds")
                 time.sleep(float(batch_sleep) / 1000.0)
+
+            # Cleanup unused cache
+            def plot_id_in_use(plot_id_in: bytes32):
+                for _, plot_info in self.plots.items():
+                    if plot_info.prover.get_id() == plot_id_in:
+                        return True
+                return False
+
+            self.log.debug(f"_refresh_task: cached entries before cleanup {len(self.cache)}")
+            self.cache = {
+                plot_id: cached_data for (plot_id, cached_data) in self.cache.items() if plot_id_in_use(plot_id)
+            }
+            self.log.debug(f"_refresh_task: cached entries after cleanup {len(self.cache)}")
 
             self.log.debug(
                 f"_refresh_task: total_result.loaded_plots {total_result.loaded_plots}, "
@@ -205,43 +268,52 @@ class PlotManager:
                         )
                         return new_provers
 
-                    (
-                        pool_public_key_or_puzzle_hash,
-                        farmer_public_key,
-                        local_master_sk,
-                    ) = parse_plot_info(prover.get_memo())
+                    cache_entry = self.cache.get(prover.get_id())
+                    if cache_entry is None:
+                        (
+                            pool_public_key_or_puzzle_hash,
+                            farmer_public_key,
+                            local_master_sk,
+                        ) = parse_plot_info(prover.get_memo())
 
-                    # Only use plots that correct keys associated with them
-                    if self.farmer_public_keys is not None and farmer_public_key not in self.farmer_public_keys:
-                        log.warning(f"Plot {file_path} has a farmer public key that is not in the farmer's pk list.")
-                        self.no_key_filenames.add(file_path)
-                        if not self.open_no_key_filenames:
-                            return new_provers
+                        # Only use plots that correct keys associated with them
+                        if self.farmer_public_keys is not None and farmer_public_key not in self.farmer_public_keys:
+                            log.warning(
+                                f"Plot {file_path} has a farmer public key that is not in the farmer's pk list."
+                            )
+                            self.no_key_filenames.add(file_path)
+                            if not self.open_no_key_filenames:
+                                return new_provers
 
-                    if isinstance(pool_public_key_or_puzzle_hash, G1Element):
-                        pool_public_key = pool_public_key_or_puzzle_hash
-                        pool_contract_puzzle_hash = None
-                    else:
-                        assert isinstance(pool_public_key_or_puzzle_hash, bytes32)
-                        pool_public_key = None
-                        pool_contract_puzzle_hash = pool_public_key_or_puzzle_hash
+                        pool_public_key: Optional[G1Element] = None
+                        pool_contract_puzzle_hash: Optional[bytes32] = None
+                        if isinstance(pool_public_key_or_puzzle_hash, G1Element):
+                            pool_public_key = pool_public_key_or_puzzle_hash
+                        else:
+                            assert isinstance(pool_public_key_or_puzzle_hash, bytes32)
+                            pool_contract_puzzle_hash = pool_public_key_or_puzzle_hash
 
-                    if (
-                        self.pool_public_keys is not None
-                        and pool_public_key is not None
-                        and pool_public_key not in self.pool_public_keys
-                    ):
-                        log.warning(f"Plot {file_path} has a pool public key that is not in the farmer's pool pk list.")
-                        self.no_key_filenames.add(file_path)
-                        if not self.open_no_key_filenames:
-                            return new_provers
+                        if (
+                            self.pool_public_keys is not None
+                            and pool_public_key is not None
+                            and pool_public_key not in self.pool_public_keys
+                        ):
+                            log.warning(
+                                f"Plot {file_path} has a pool public key that is not in the farmer's pool pk list."
+                            )
+                            self.no_key_filenames.add(file_path)
+                            if not self.open_no_key_filenames:
+                                return new_provers
 
-                    stat_info = file_path.stat()
-                    local_sk = master_sk_to_local_sk(local_master_sk)
+                        stat_info = file_path.stat()
+                        local_sk = master_sk_to_local_sk(local_master_sk)
 
-                    plot_public_key: G1Element = ProofOfSpace.generate_plot_public_key(
-                        local_sk.get_g1(), farmer_public_key, pool_contract_puzzle_hash is not None
-                    )
+                        plot_public_key: G1Element = ProofOfSpace.generate_plot_public_key(
+                            local_sk.get_g1(), farmer_public_key, pool_contract_puzzle_hash is not None
+                        )
+
+                        cache_entry = CacheEntry(pool_public_key, pool_contract_puzzle_hash, plot_public_key)
+                        self.cache[prover.get_id()] = cache_entry
 
                     with self.plot_filename_paths_lock:
                         if file_path.name not in self.plot_filename_paths:
@@ -257,9 +329,9 @@ class PlotManager:
 
                     new_provers[file_path] = PlotInfo(
                         prover,
-                        pool_public_key,
-                        pool_contract_puzzle_hash,
-                        plot_public_key,
+                        cache_entry.pool_public_key,
+                        cache_entry.pool_contract_puzzle_hash,
+                        cache_entry.plot_public_key,
                         stat_info.st_size,
                         stat_info.st_mtime,
                     )
