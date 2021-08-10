@@ -1,3 +1,5 @@
+import pickle
+from dataclasses import dataclass
 import logging
 import threading
 import time
@@ -27,6 +29,17 @@ from chia.wallet.derive_keys import master_sk_to_local_sk
 
 log = logging.getLogger(__name__)
 
+CURRENT_VERSION: int = 1
+
+
+@dataclass
+class Cache:
+    version: int
+    plots: Dict[Path, PlotInfo]
+    plot_filename_paths: Dict[str, Tuple[str, Set[str]]]
+    failed_to_open_filenames: Dict[Path, int]
+    no_key_filenames: Set[Path]
+
 
 class PlotManager:
     plots: Dict[Path, PlotInfo]
@@ -46,6 +59,7 @@ class PlotManager:
     _refresh_thread: Optional[threading.Thread]
     _refreshing_enabled: bool
     _refresh_callback: Callable
+    _version: int = CURRENT_VERSION
 
     def __init__(
         self,
@@ -81,6 +95,54 @@ class PlotManager:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self._lock.release()
 
+    def cache_path(self):
+        return Path(self.root_path / "plot_manager.dat")
+
+    def load(self):
+        try:
+            serialized = self.cache_path().read_bytes()
+            self.log.info(f"Loaded {len(serialized)} bytes of cached data")
+            stored_cache: Cache = pickle.loads(serialized)
+            if stored_cache.version < CURRENT_VERSION:
+                # TODO, Migrate or drop current cache if the version changes.
+                raise ValueError(f"Invalid cache version {stored_cache.version}. Expected minimum {CURRENT_VERSION}.")
+            self.plots = stored_cache.plots
+            self.plot_filename_paths = stored_cache.plot_filename_paths
+            self.failed_to_open_filenames = stored_cache.failed_to_open_filenames
+            self.no_key_filenames = stored_cache.no_key_filenames
+            # Make sure all prover objects are valid after the deserialization and drop the invalid ones
+            remove_paths: List[Path] = []
+            for path, plot_info in stored_cache.plots.items():
+                if not plot_info.prover.is_valid():
+                    self.log.error("Invalid prover: " + plot_info.prover.get_filename())
+                    remove_paths.append(path)
+            for path in remove_paths:
+                del self.plots[path]
+                if path.name in self.plot_filename_paths:
+                    del self.plot_filename_paths[path.name]
+                if path in self.failed_to_open_filenames:
+                    del self.failed_to_open_filenames[path]
+                if path in self.no_key_filenames:
+                    self.no_key_filenames.remove(path)
+            self.log.info(f"Loaded {len(self.plots)} valid plots.")
+        except Exception as e:
+            self.log.error(f"Failed to load cache: {e}, {traceback.format_exc()}")
+
+    def save(self):
+        try:
+            cache: Cache = Cache(
+                self._version,
+                self.plots,
+                self.plot_filename_paths,
+                self.failed_to_open_filenames,
+                self.no_key_filenames,
+            )
+            serialized = pickle.dumps(cache)
+            self.cache_path().write_bytes(serialized)
+            self.log.info(f"Saved {len(serialized)} bytes of cached data")
+        except Exception as e:
+            self.log.error(f"Failed to save cache: {e}, {traceback.format_exc()}")
+
     def set_refresh_callback(self, callback: Callable):
         self._refresh_callback = callback  # type: ignore
 
@@ -99,6 +161,7 @@ class PlotManager:
         return time.time() - self.last_refresh_time > float(self.refresh_parameter.interval_seconds)
 
     def start_refreshing(self):
+        self.load()
         self._refreshing_enabled = True
         if self._refresh_thread is None or not self._refresh_thread.is_alive():
             self._refresh_thread = threading.Thread(target=self._refresh_task)
@@ -109,6 +172,7 @@ class PlotManager:
         if self._refresh_thread is not None and self._refresh_thread.is_alive():
             self._refresh_thread.join()
             self._refresh_thread = None
+        self.save()
 
     def trigger_refresh(self):
         log.debug("trigger_refresh")
