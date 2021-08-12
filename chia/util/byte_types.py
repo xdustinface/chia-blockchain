@@ -62,4 +62,16 @@ def make_sized_bytes(size: int):
         __repr__=__repr__,
     )
 
-    return type(name, (bytes,), namespace)
+    # The following is a workaround to archive pickle support for `sized_bytes` types (bytes4, bytes8, ...).
+    # Obviously `type()` sets `__module__` of those custom types to `chia.util.byte_types` while it must be
+    # `chia.types.blockchain_format.sized_bytes` since the class gets created there. This leads to pickle trying to load
+    # the sized byte types from the wrong module:
+    #
+    #    _pickle.PicklingError: Can't pickle <class 'chia.util.byte_types.bytesX'>:
+    #                           attribute lookup bytesX on chia.util.byte_types failed
+    #
+    # Setting `__module__` to `None` seems to force a lookup of the module in pickle. Normally we would just return
+    # the result like: `return type(name, (bytes,), namespace)`
+    t = type(name, (bytes,), namespace)
+    t.__module__ = None  # type: ignore
+    return t
