@@ -212,7 +212,7 @@ class PlotManager:
                     ) = parse_plot_info(prover.get_memo())
 
                     # Only use plots that correct keys associated with them
-                    if self.farmer_public_keys is not None and farmer_public_key not in self.farmer_public_keys:
+                    if farmer_public_key not in self.farmer_public_keys:
                         log.warning(f"Plot {file_path} has a farmer public key that is not in the farmer's pk list.")
                         self.no_key_filenames.add(file_path)
                         if not self.open_no_key_filenames:
@@ -226,11 +226,7 @@ class PlotManager:
                         pool_public_key = None
                         pool_contract_puzzle_hash = pool_public_key_or_puzzle_hash
 
-                    if (
-                        self.pool_public_keys is not None
-                        and pool_public_key is not None
-                        and pool_public_key not in self.pool_public_keys
-                    ):
+                    if pool_public_key is not None and pool_public_key not in self.pool_public_keys:
                         log.warning(f"Plot {file_path} has a pool public key that is not in the farmer's pool pk list.")
                         self.no_key_filenames.add(file_path)
                         if not self.open_no_key_filenames:
