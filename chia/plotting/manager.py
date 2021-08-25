@@ -175,19 +175,33 @@ class PlotManager:
                     if stat_info.st_mtime == self.plots[file_path].time_modified:
                         new_provers[file_path] = self.plots[file_path]
                         return new_provers
-                entry: Optional[Tuple[str, Set[str]]] = self.plot_filename_paths.get(file_path.name)
-                if entry is not None:
-                    loaded_parent, duplicates = entry
-                    if str(file_path.parent) in duplicates:
+
+                with self.plot_filename_paths_lock, counter_lock:
+
+                    def batch_size_processed():
+                        if result.processed_files >= self.refresh_parameter.batch_size:
+                            result.remaining_files += 1
+                            return True
+                        return False
+
+                    entry: Optional[Tuple[str, Set[str]]] = self.plot_filename_paths.get(file_path.name)
+                    if entry is None:
+                        if batch_size_processed():
+                            return new_provers
+                        entry = (str(file_path.parent), set())
+                        self.plot_filename_paths[file_path.name] = entry
+                        result.processed_files += 1
+                    elif str(file_path.parent) not in entry[1]:
+                        if batch_size_processed():
+                            return new_provers
+                        entry[1].add(str(file_path.parent))
+                        log.warning(f"Have multiple copies of the plot {file_path} in " f"{entry[1]}.")
+                        result.processed_files += 1
+                        return new_provers
+                    else:
                         log.debug(f"Skip duplicated plot {str(file_path)}")
                         return new_provers
                 try:
-                    with counter_lock:
-                        if result.processed_files >= self.refresh_parameter.batch_size:
-                            result.remaining_files += 1
-                            return new_provers
-                        result.processed_files += 1
-
                     prover = DiskProver(str(file_path))
 
                     log.debug(f"process_file {str(file_path)}")
@@ -237,18 +251,6 @@ class PlotManager:
                     plot_public_key: G1Element = ProofOfSpace.generate_plot_public_key(
                         local_sk.get_g1(), farmer_public_key, pool_contract_puzzle_hash is not None
                     )
-
-                    with self.plot_filename_paths_lock:
-                        if file_path.name not in self.plot_filename_paths:
-                            self.plot_filename_paths[file_path.name] = (str(Path(prover.get_filename()).parent), set())
-                        else:
-                            self.plot_filename_paths[file_path.name][1].add(str(Path(prover.get_filename()).parent))
-                        if len(self.plot_filename_paths[file_path.name][1]) > 0:
-                            log.warning(
-                                f"Have multiple copies of the plot {file_path} in "
-                                f"{self.plot_filename_paths[file_path.name][1]}."
-                            )
-                            return new_provers
 
                     new_provers[file_path] = PlotInfo(
                         prover,
