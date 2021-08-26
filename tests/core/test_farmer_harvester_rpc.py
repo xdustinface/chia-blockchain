@@ -304,13 +304,14 @@ class TestRpc:
             harvester.plot_manager.stop_refreshing()
             assert harvester.plot_manager.cache_path().exists()
 
-            expected_result.loaded_plots = 0
+            expected_result.loaded_plots = 20
             expected_result.removed_plots = 0
-            expected_result.processed_files = 0
+            expected_result.processed_files = 20
             expected_result.remaining_files = 0
             plot_manager: PlotManager = PlotManager(harvester.root_path, test_refresh_callback)
-            plot_manager.load()
-            assert len(harvester.plot_manager.plots) == len(plot_manager.plots)
+            plot_manager.start_refreshing()
+            assert len(harvester.plot_manager.cache.data) == len(plot_manager.cache.data)
+            await time_out_assert(5, plot_manager.needs_refresh, value=False)
             for path, plot_info in harvester.plot_manager.plots.items():
                 assert path in plot_manager.plots
                 assert plot_manager.plots[path].prover.get_filename() == plot_info.prover.get_filename()
@@ -332,8 +333,8 @@ class TestRpc:
                 file.write(b"\ff")
             # Make sure it just loads the plots normally if it fails to load the cache
             plot_manager = PlotManager(harvester.root_path, test_refresh_callback)
-            plot_manager.load()
-            assert len(plot_manager.plots) == 0
+            plot_manager.load_cache()
+            assert len(plot_manager.cache.data) == 0
             plot_manager.set_public_keys(
                 harvester.plot_manager.farmer_public_keys, harvester.plot_manager.pool_public_keys
             )
