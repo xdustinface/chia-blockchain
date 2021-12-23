@@ -92,3 +92,42 @@ async def test_harvester_handshake(environment):
     await time_out_assert(5, farmer_is_started, True, farmer)
     await time_out_assert(5, handshake_task_active, False)
     await time_out_assert(5, handshake_done, True)
+
+
+@pytest.fixture(scope="function")
+async def environment_started_services():
+    async for _ in setup_farmer_harvester(test_constants, True):
+        yield _
+
+
+async def handshake_done(harvester) -> bool:
+    return harvester.plot_manager._refresh_thread is not None and len(harvester.plot_manager.farmer_public_keys) > 0
+
+
+async def restart_farmer(farmer_service) -> None:
+    farmer_service.stop()
+    await farmer_service.wait_closed()
+    await asyncio.sleep(10)
+    await farmer_service.start()
+    await asyncio.sleep(10)
+
+
+@pytest.mark.asyncio
+async def test_start_here(environment) -> None:
+    harvester_service, farmer_service = environment
+
+    await farmer_service.start()
+    await harvester_service.start()
+
+    await time_out_assert(10, handshake_done, True, harvester_service._node)
+
+    await restart_farmer(farmer_service)
+
+
+@pytest.mark.asyncio
+async def test_start_in_fixture(environment_started_services) -> None:
+    harvester_service, farmer_service = environment_started_services
+
+    await time_out_assert(10, handshake_done, True, harvester_service._node)
+
+    await restart_farmer(farmer_service)
