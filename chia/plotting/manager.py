@@ -5,7 +5,6 @@ import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
-from concurrent.futures.thread import ThreadPoolExecutor
 
 from blspy import G1Element
 from chiapos import DiskProver
@@ -456,11 +455,14 @@ class PlotManager:
 
             return new_plot_info
 
-        with self, ThreadPoolExecutor() as executor:
-            plots_refreshed: Dict[Path, PlotInfo] = {}
-            for new_plot in executor.map(process_file, plot_paths):
+        plots_refreshed: Dict[Path, PlotInfo] = {}
+        for path in plot_paths:
+            with self:
+                new_plot = process_file(path)
                 if new_plot is not None:
                     plots_refreshed[Path(new_plot.prover.get_filename())] = new_plot
+
+        with self:
             self.plots.update(plots_refreshed)
 
         result.duration = time.time() - start_time
