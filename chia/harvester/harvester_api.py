@@ -72,6 +72,7 @@ class HarvesterAPI:
         def blocking_lookup(filename: Path, plot_info: PlotInfo) -> List[Tuple[bytes32, ProofOfSpace]]:
             # Uses the DiskProver object to lookup qualities. This is a blocking call,
             # so it should be run in a thread pool.
+            lookup_start: float = time.time()
             try:
                 plot_id = plot_info.prover.get_id()
                 sp_challenge_hash = ProofOfSpace.calculate_pos_challenge(
@@ -140,6 +141,9 @@ class HarvesterAPI:
                                     ),
                                 )
                             )
+                lookup_time = time.time() - lookup_start
+                if lookup_time > 0.5:
+                    self.harvester.log.info(f"Looking up qualities on {filename} took: {lookup_time:.2f} seconds.")
                 return responses
             except Exception as e:
                 self.harvester.log.error(f"Unknown error: {e}")
@@ -171,6 +175,9 @@ class HarvesterAPI:
         passed = 0
         total = 0
         with self.harvester.plot_manager:
+            self.harvester.log.debug(
+                f"new_signage_point_harvester: lock aquired after: {time.time() - start:.2f} seconds"
+            )
             for try_plot_filename, try_plot_info in self.harvester.plot_manager.plots.items():
                 # Passes the plot filter (does not check sp filter yet though, since we have not reached sp)
                 # This is being executed at the beginning of the slot
@@ -188,16 +195,6 @@ class HarvesterAPI:
         total_proofs_found = 0
         for filename_sublist_awaitable in asyncio.as_completed(awaitables):
             filename, sublist = await filename_sublist_awaitable
-            time_taken = time.time() - start
-            if time_taken > 5:
-                self.harvester.log.warning(
-                    f"Looking up qualities on {filename} took: {time_taken}. This should be below 5 seconds "
-                    f"to minimize risk of losing rewards."
-                )
-            else:
-                pass
-                # If you want additional logs, uncomment the following line
-                # self.harvester.log.debug(f"Looking up qualities on {filename} took: {time_taken}")
             for response in sublist:
                 total_proofs_found += 1
                 msg = make_msg(ProtocolMessageTypes.new_proof_of_space, response)
@@ -214,6 +211,12 @@ class HarvesterAPI:
         )
         pass_msg = make_msg(ProtocolMessageTypes.farming_info, farming_info)
         await peer.send_message(pass_msg)
+        duration = time.time() - start
+        if duration > 5:
+            self.harvester.log.warning(
+                f"new_signage_point_harvester took: {duration:.2f} seconds. "
+                "This should be below 5 seconds to minimize risk of losing rewards."
+            )
         self.harvester.log.info(
             f"{len(awaitables)} plots were eligible for farming {new_challenge.challenge_hash.hex()[:10]}..."
             f" Found {total_proofs_found} proofs. Time: {time.time() - start:.5f} s. "
