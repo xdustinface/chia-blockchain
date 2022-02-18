@@ -7,11 +7,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 import aiohttp
 
-from chia.rpc.util import wrap_http_handler
+from chia.rpc.util import wrap_http_handler, RequestParams, OutOfRangeError
 from chia.server.outbound_message import NodeType
 from chia.server.server import ssl_context_for_server
+from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.peer_info import PeerInfo
-from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint16
 from chia.util.json_util import dict_to_json_str
 from chia.util.ws_message import create_payload, create_payload_dict, format_response, pong
@@ -53,7 +53,7 @@ class RpcServer:
 
         change = args[0]
         if change == "add_connection" or change == "close_connection" or change == "peer_changed_peak":
-            data = await self.get_connections({})
+            data = await self.get_connections(RequestParams())
             if data is not None:
 
                 payload = create_payload_dict(
@@ -89,16 +89,21 @@ class RpcServer:
             "/get_routes": self._get_routes,
         }
 
-    async def _get_routes(self, request: Dict) -> Dict:
+    async def _get_routes(self, _: RequestParams) -> Dict:
         return {
             "success": "true",
             "routes": list(self.get_routes().keys()),
         }
 
-    async def get_connections(self, request: Dict) -> Dict:
+    async def get_connections(self, params: RequestParams) -> Dict:
+        node_type_value: Optional[uint16] = params.get_uint16_optional("node_type")
         request_node_type: Optional[NodeType] = None
-        if "node_type" in request:
-            request_node_type = NodeType(request["node_type"])
+        if node_type_value is not None:
+            try:
+                request_node_type = NodeType(node_type_value)
+            except Exception:
+                raise OutOfRangeError(node_type_value, NodeType)
+
         if self.rpc_api.service.server is None:
             raise ValueError("Global connections is not set")
         if self.rpc_api.service.server._local_type is NodeType.FULL_NODE:
@@ -151,10 +156,10 @@ class RpcServer:
             ]
         return {"connections": con_info}
 
-    async def open_connection(self, request: Dict):
-        host = request["host"]
-        port = request["port"]
-        target_node: PeerInfo = PeerInfo(host, uint16(int(port)))
+    async def open_connection(self, params: RequestParams):
+        host: str = params.get_str("host")
+        port: uint16 = params.get_uint16("port")
+        target_node: PeerInfo = PeerInfo(host, port)
         on_connect = None
         if hasattr(self.rpc_api.service, "on_connect"):
             on_connect = self.rpc_api.service.on_connect
@@ -164,8 +169,8 @@ class RpcServer:
             raise ValueError("Start client failed, or server is not set")
         return {}
 
-    async def close_connection(self, request: Dict):
-        node_id = hexstr_to_bytes(request["node_id"])
+    async def close_connection(self, params: RequestParams):
+        node_id: bytes32 = params.get_hash("node_id")
         if self.rpc_api.service.server is None:
             raise aiohttp.web.HTTPInternalServerError()
         connections_to_close = [c for c in self.rpc_api.service.server.get_connections() if c.peer_node_id == node_id]
@@ -175,7 +180,7 @@ class RpcServer:
             await connection.close()
         return {}
 
-    async def stop_node(self, request):
+    async def stop_node(self, _: RequestParams):
         """
         Shuts down the node.
         """

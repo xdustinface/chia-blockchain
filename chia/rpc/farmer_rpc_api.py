@@ -1,8 +1,8 @@
 from typing import Any, Callable, Dict, List, Optional
 
 from chia.farmer.farmer import Farmer
+from chia.rpc.util import RequestParams
 from chia.types.blockchain_format.sized_bytes import bytes32
-from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
 
 
@@ -26,7 +26,7 @@ class FarmerRpcApi:
     async def _state_changed(self, change: str, change_data: Dict) -> List[WsRpcMessage]:
         if change == "new_signage_point":
             sp_hash = change_data["sp_hash"]
-            data = await self.get_signage_point({"sp_hash": sp_hash.hex()})
+            data = await self.get_signage_point(RequestParams({"sp_hash": sp_hash.hex()}))
             return [
                 create_payload_dict(
                     "new_signage_point",
@@ -56,8 +56,8 @@ class FarmerRpcApi:
 
         return []
 
-    async def get_signage_point(self, request: Dict) -> Dict:
-        sp_hash = hexstr_to_bytes(request["sp_hash"])
+    async def get_signage_point(self, params: RequestParams) -> Dict:
+        sp_hash: bytes32 = params.get_hash("sp_hash")
         for _, sps in self.service.sps.items():
             for sp in sps:
                 if sp.challenge_chain_sp == sp_hash:
@@ -75,7 +75,7 @@ class FarmerRpcApi:
                     }
         raise ValueError(f"Signage point {sp_hash.hex()} not found")
 
-    async def get_signage_points(self, _: Dict) -> Dict[str, Any]:
+    async def get_signage_points(self, _: RequestParams) -> Dict[str, Any]:
         result: List[Dict[str, Any]] = []
         for sps in self.service.sps.values():
             for sp in sps:
@@ -95,21 +95,17 @@ class FarmerRpcApi:
                 )
         return {"signage_points": result}
 
-    async def get_reward_targets(self, request: Dict) -> Dict:
-        search_for_private_key = request["search_for_private_key"]
+    async def get_reward_targets(self, params: RequestParams) -> Dict:
+        search_for_private_key: bool = params.get_bool("search_for_private_key")
         return await self.service.get_reward_targets(search_for_private_key)
 
-    async def set_reward_targets(self, request: Dict) -> Dict:
-        farmer_target, pool_target = None, None
-        if "farmer_target" in request:
-            farmer_target = request["farmer_target"]
-        if "pool_target" in request:
-            pool_target = request["pool_target"]
-
+    async def set_reward_targets(self, params: RequestParams) -> Dict:
+        farmer_target: Optional[str] = params.get_str_optional("farmer_target")
+        pool_target: Optional[str] = params.get_str_optional("pool_target")
         self.service.set_reward_targets(farmer_target, pool_target)
         return {}
 
-    async def get_pool_state(self, _: Dict) -> Dict:
+    async def get_pool_state(self, _: RequestParams) -> Dict:
         pools_list = []
         for p2_singleton_puzzle_hash, pool_dict in self.service.pool_state.items():
             pool_state = pool_dict.copy()
@@ -117,16 +113,17 @@ class FarmerRpcApi:
             pools_list.append(pool_state)
         return {"pool_state": pools_list}
 
-    async def set_payout_instructions(self, request: Dict) -> Dict:
-        launcher_id: bytes32 = bytes32.from_hexstr(request["launcher_id"])
-        await self.service.set_payout_instructions(launcher_id, request["payout_instructions"])
+    async def set_payout_instructions(self, params: RequestParams) -> Dict:
+        launcher_id: bytes32 = params.get_hash("launcher_id")
+        payout_instruction: str = params.get_str("payout_instructions")
+        await self.service.set_payout_instructions(launcher_id, payout_instruction)
         return {}
 
-    async def get_harvesters(self, _: Dict):
+    async def get_harvesters(self, _: RequestParams):
         return await self.service.get_harvesters()
 
-    async def get_pool_login_link(self, request: Dict) -> Dict:
-        launcher_id: bytes32 = bytes32(hexstr_to_bytes(request["launcher_id"]))
+    async def get_pool_login_link(self, params: RequestParams) -> Dict:
+        launcher_id: bytes32 = params.get_hash("launcher_id")
         login_link: Optional[str] = await self.service.generate_login_link(launcher_id)
         if login_link is None:
             raise ValueError(f"Failed to generate login link for {launcher_id.hex()}")

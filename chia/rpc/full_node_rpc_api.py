@@ -4,6 +4,7 @@ from chia.consensus.block_record import BlockRecord
 from chia.consensus.pos_quality import UI_ACTUAL_SPACE_CONSTANT_FACTOR
 from chia.full_node.full_node import FullNode
 from chia.full_node.mempool_check_conditions import get_puzzle_and_solution_for_coin
+from chia.rpc.util import RequestParams
 from chia.types.blockchain_format.program import Program, SerializedProgram
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.coin_record import CoinRecord
@@ -13,7 +14,6 @@ from chia.types.generator_types import BlockGenerator
 from chia.types.mempool_inclusion_status import MempoolInclusionStatus
 from chia.types.spend_bundle import SpendBundle
 from chia.types.unfinished_header_block import UnfinishedHeaderBlock
-from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint64, uint128
 from chia.util.log_exceptions import log_exceptions
 from chia.util.ws_message import WsRpcMessage, create_payload_dict
@@ -68,7 +68,7 @@ class FullNodeRpcApi:
 
         payloads = []
         if change == "new_peak" or change == "sync_mode":
-            data = await self.get_blockchain_state({})
+            data = await self.get_blockchain_state(RequestParams())
             assert data is not None
             payloads.append(
                 create_payload_dict(
@@ -96,11 +96,11 @@ class FullNodeRpcApi:
 
     # this function is just here for backwards-compatibility. It will probably
     # be removed in the future
-    async def get_initial_freeze_period(self, _: Dict):
+    async def get_initial_freeze_period(self, _: RequestParams):
         # Mon May 03 2021 17:00:00 GMT+0000
         return {"INITIAL_FREEZE_END_TIMESTAMP": 1620061200}
 
-    async def get_blockchain_state(self, _request: Dict):
+    async def get_blockchain_state(self, _: RequestParams):
         """
         Returns a summary of the node's view of the blockchain.
         """
@@ -162,7 +162,7 @@ class FullNodeRpcApi:
             assert header_hash is not None
             older_block_hex = header_hash.hex()
             space = await self.get_network_space(
-                {"newer_block_header_hash": newer_block_hex, "older_block_header_hash": older_block_hex}
+                RequestParams({"newer_block_header_hash": newer_block_hex, "older_block_header_hash": older_block_hex})
             )
         else:
             space = {"space": uint128(0)}
@@ -209,14 +209,15 @@ class FullNodeRpcApi:
         self.cached_blockchain_state = dict(response["blockchain_state"])
         return response
 
-    async def get_network_info(self, request: Dict):
+    async def get_network_info(self, _: RequestParams):
         network_name = self.service.config["selected_network"]
         address_prefix = self.service.config["network_overrides"]["config"][network_name]["address_prefix"]
         return {"network_name": network_name, "network_prefix": address_prefix}
 
-    async def get_recent_signage_point_or_eos(self, request: Dict):
-        if "sp_hash" not in request:
-            challenge_hash: bytes32 = bytes32.from_hexstr(request["challenge_hash"])
+    async def get_recent_signage_point_or_eos(self, params: RequestParams):
+        sp_hash: Optional[bytes32] = params.get_hash_optional("sp_hash")
+        if sp_hash is None:
+            challenge_hash: bytes32 = params.get_hash("challenge_hash")
             # This is the case of getting an end of slot
             eos_tuple = self.service.full_node_store.recent_eos.get(challenge_hash)
             if not eos_tuple:
@@ -249,7 +250,6 @@ class FullNodeRpcApi:
             return {"eos": eos, "time_received": time_received, "reverted": True}
 
         # Now we handle the case of getting a signage point
-        sp_hash: bytes32 = bytes32.from_hexstr(request["sp_hash"])
         sp_tuple = self.service.full_node_store.recent_signage_points.get(sp_hash)
         if sp_tuple is None:
             raise ValueError(f"Did not find sp {sp_hash.hex()} in cache")
@@ -303,31 +303,19 @@ class FullNodeRpcApi:
 
         return {"signage_point": sp, "time_received": time_received, "reverted": True}
 
-    async def get_block(self, request: Dict) -> Optional[Dict]:
-        if "header_hash" not in request:
-            raise ValueError("No header_hash in request")
-        header_hash = bytes32.from_hexstr(request["header_hash"])
-
+    async def get_block(self, params: RequestParams) -> Optional[Dict]:
+        header_hash = params.get_hash("header_hash")
         block: Optional[FullBlock] = await self.service.block_store.get_full_block(header_hash)
         if block is None:
             raise ValueError(f"Block {header_hash.hex()} not found")
 
         return {"block": block}
 
-    async def get_blocks(self, request: Dict) -> Optional[Dict]:
-        if "start" not in request:
-            raise ValueError("No start in request")
-        if "end" not in request:
-            raise ValueError("No end in request")
-        exclude_hh = False
-        if "exclude_header_hash" in request:
-            exclude_hh = request["exclude_header_hash"]
-        exclude_reorged = False
-        if "exclude_reorged" in request:
-            exclude_reorged = request["exclude_reorged"]
-
-        start = int(request["start"])
-        end = int(request["end"])
+    async def get_blocks(self, params: RequestParams) -> Optional[Dict]:
+        exclude_hh: bool = params.get_bool_optional("exclude_header_hash") or False
+        exclude_reorged: bool = params.get_bool_optional("exclude_reorged") or False
+        start: uint32 = params.get_uint32("start")
+        end: uint32 = params.get_uint32("end")
         block_range = []
         for a in range(start, end):
             block_range.append(uint32(a))
@@ -344,7 +332,7 @@ class FullNodeRpcApi:
             json_blocks.append(json)
         return {"blocks": json_blocks}
 
-    async def get_block_count_metrics(self, request: Dict):
+    async def get_block_count_metrics(self, _: RequestParams):
         compact_blocks = 0
         uncompact_blocks = 0
         with log_exceptions(self.service.log, consume=True):
@@ -364,14 +352,9 @@ class FullNodeRpcApi:
             }
         }
 
-    async def get_block_records(self, request: Dict) -> Optional[Dict]:
-        if "start" not in request:
-            raise ValueError("No start in request")
-        if "end" not in request:
-            raise ValueError("No end in request")
-
-        start = int(request["start"])
-        end = int(request["end"])
+    async def get_block_records(self, params: RequestParams) -> Optional[Dict]:
+        start: uint32 = params.get_uint32("start")
+        end: uint32 = params.get_uint32("end")
         records = []
         peak_height = self.service.blockchain.get_peak_height()
         if peak_height is None:
@@ -395,15 +378,12 @@ class FullNodeRpcApi:
             records.append(record)
         return {"block_records": records}
 
-    async def get_block_record_by_height(self, request: Dict) -> Optional[Dict]:
-        if "height" not in request:
-            raise ValueError("No height in request")
-        height = request["height"]
-        header_height = uint32(int(height))
+    async def get_block_record_by_height(self, params: RequestParams) -> Optional[Dict]:
+        height: uint32 = params.get_uint32("height")
         peak_height = self.service.blockchain.get_peak_height()
-        if peak_height is None or header_height > peak_height:
+        if peak_height is None or height > peak_height:
             raise ValueError(f"Block height {height} not found in chain")
-        header_hash: Optional[bytes32] = self.service.blockchain.height_to_hash(header_height)
+        header_hash: Optional[bytes32] = self.service.blockchain.height_to_hash(height)
         if header_hash is None:
             raise ValueError(f"Block hash {height} not found in chain")
         record: Optional[BlockRecord] = self.service.blockchain.try_block_record(header_hash)
@@ -414,11 +394,8 @@ class FullNodeRpcApi:
             raise ValueError(f"Block {header_hash} does not exist")
         return {"block_record": record}
 
-    async def get_block_record(self, request: Dict):
-        if "header_hash" not in request:
-            raise ValueError("header_hash not in request")
-        header_hash_str = request["header_hash"]
-        header_hash = bytes32.from_hexstr(header_hash_str)
+    async def get_block_record(self, params: RequestParams):
+        header_hash: bytes32 = params.get_hash("header_hash")
         record: Optional[BlockRecord] = self.service.blockchain.try_block_record(header_hash)
         if record is None:
             # Fetch from DB
@@ -428,14 +405,14 @@ class FullNodeRpcApi:
 
         return {"block_record": record}
 
-    async def get_unfinished_block_headers(self, request: Dict) -> Optional[Dict]:
+    async def get_unfinished_block_headers(self, _: RequestParams) -> Optional[Dict]:
 
         peak: Optional[BlockRecord] = self.service.blockchain.get_peak()
         if peak is None:
             return {"headers": []}
 
         response_headers: List[UnfinishedHeaderBlock] = []
-        for ub_height, block, _ in (self.service.full_node_store.get_unfinished_blocks()).values():
+        for ub_height, block, pre_validation in (self.service.full_node_store.get_unfinished_blocks()).values():
             if ub_height == peak.height:
                 unfinished_header_block = UnfinishedHeaderBlock(
                     block.finished_sub_slots,
@@ -449,21 +426,16 @@ class FullNodeRpcApi:
                 response_headers.append(unfinished_header_block)
         return {"headers": response_headers}
 
-    async def get_network_space(self, request: Dict) -> Optional[Dict]:
+    async def get_network_space(self, params: RequestParams) -> Optional[Dict]:
         """
         Retrieves an estimate of total space validating the chain
         between two block header hashes.
         """
-        if "newer_block_header_hash" not in request or "older_block_header_hash" not in request:
-            raise ValueError("Invalid request. newer_block_header_hash and older_block_header_hash required")
-        newer_block_hex = request["newer_block_header_hash"]
-        older_block_hex = request["older_block_header_hash"]
+        newer_block_bytes: bytes32 = params.get_hash("newer_block_header_hash")
+        older_block_bytes: bytes32 = params.get_hash("older_block_header_hash")
 
-        if newer_block_hex == older_block_hex:
+        if newer_block_bytes == older_block_bytes:
             raise ValueError("New and old must not be the same")
-
-        newer_block_bytes = bytes32.from_hexstr(newer_block_hex)
-        older_block_bytes = bytes32.from_hexstr(older_block_hex)
 
         newer_block = await self.service.block_store.get_block_record(newer_block_bytes)
         if newer_block is None:
@@ -485,110 +457,108 @@ class FullNodeRpcApi:
         )
         return {"space": uint128(int(network_space_bytes_estimate))}
 
-    async def get_coin_records_by_puzzle_hash(self, request: Dict) -> Optional[Dict]:
+    async def get_coin_records_by_puzzle_hash(self, params: RequestParams) -> Optional[Dict]:
         """
         Retrieves the coins for a given puzzlehash, by default returns unspent coins.
         """
-        if "puzzle_hash" not in request:
-            raise ValueError("Puzzle hash not in request")
-        kwargs: Dict[str, Any] = {"include_spent_coins": False, "puzzle_hash": hexstr_to_bytes(request["puzzle_hash"])}
-        if "start_height" in request:
-            kwargs["start_height"] = uint32(request["start_height"])
-        if "end_height" in request:
-            kwargs["end_height"] = uint32(request["end_height"])
+        kwargs: Dict[str, Any] = {"include_spent_coins": False, "puzzle_hash": params.get_hash("puzzle_hash")}
+        start_height: Optional[uint32] = params.get_uint32_optional("start_height")
+        if start_height is not None:
+            kwargs["start_height"] = start_height
+        end_height: Optional[uint32] = params.get_uint32_optional("end_height")
+        if end_height is not None:
+            kwargs["end_height"] = end_height
 
-        if "include_spent_coins" in request:
-            kwargs["include_spent_coins"] = request["include_spent_coins"]
-
+        include_spent_coins: Optional[bool] = params.get_bool_optional("include_spent_coins")
+        if include_spent_coins is not None:
+            kwargs["include_spent_coins"] = include_spent_coins
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_puzzle_hash(**kwargs)
 
         return {"coin_records": [coin_record_dict_backwards_compat(cr.to_json_dict()) for cr in coin_records]}
 
-    async def get_coin_records_by_puzzle_hashes(self, request: Dict) -> Optional[Dict]:
+    async def get_coin_records_by_puzzle_hashes(self, params: RequestParams) -> Optional[Dict]:
         """
         Retrieves the coins for a given puzzlehash, by default returns unspent coins.
         """
-        if "puzzle_hashes" not in request:
-            raise ValueError("Puzzle hashes not in request")
         kwargs: Dict[str, Any] = {
             "include_spent_coins": False,
-            "puzzle_hashes": [hexstr_to_bytes(ph) for ph in request["puzzle_hashes"]],
+            "puzzle_hashes": params.get_hash_list("puzzle_hashes"),
         }
-        if "start_height" in request:
-            kwargs["start_height"] = uint32(request["start_height"])
-        if "end_height" in request:
-            kwargs["end_height"] = uint32(request["end_height"])
+        start_height: Optional[uint32] = params.get_uint32_optional("start_height")
+        if start_height is not None:
+            kwargs["start_height"] = start_height
+        end_height: Optional[uint32] = params.get_uint32_optional("end_height")
+        if end_height is not None:
+            kwargs["end_height"] = end_height
 
-        if "include_spent_coins" in request:
-            kwargs["include_spent_coins"] = request["include_spent_coins"]
+        include_spent_coins: Optional[bool] = params.get_bool_optional("include_spent_coins")
+        if include_spent_coins is not None:
+            kwargs["include_spent_coins"] = include_spent_coins
 
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_puzzle_hashes(**kwargs)
 
         return {"coin_records": [coin_record_dict_backwards_compat(cr.to_json_dict()) for cr in coin_records]}
 
-    async def get_coin_record_by_name(self, request: Dict) -> Optional[Dict]:
+    async def get_coin_record_by_name(self, params: RequestParams) -> Optional[Dict]:
         """
         Retrieves a coin record by it's name.
         """
-        if "name" not in request:
-            raise ValueError("Name not in request")
-        name = bytes32.from_hexstr(request["name"])
-
+        name: bytes32 = params.get_hash("name")
         coin_record: Optional[CoinRecord] = await self.service.blockchain.coin_store.get_coin_record(name)
         if coin_record is None:
             raise ValueError(f"Coin record 0x{name.hex()} not found")
 
         return {"coin_record": coin_record_dict_backwards_compat(coin_record.to_json_dict())}
 
-    async def get_coin_records_by_names(self, request: Dict) -> Optional[Dict]:
+    async def get_coin_records_by_names(self, params: RequestParams) -> Optional[Dict]:
         """
         Retrieves the coins for given coin IDs, by default returns unspent coins.
         """
-        if "names" not in request:
-            raise ValueError("Names not in request")
         kwargs: Dict[str, Any] = {
             "include_spent_coins": False,
-            "names": [hexstr_to_bytes(name) for name in request["names"]],
+            "names": params.get_hash_list("names"),
         }
-        if "start_height" in request:
-            kwargs["start_height"] = uint32(request["start_height"])
-        if "end_height" in request:
-            kwargs["end_height"] = uint32(request["end_height"])
+        start_height: Optional[uint32] = params.get_uint32_optional("start_height")
+        if start_height is not None:
+            kwargs["start_height"] = start_height
+        end_height: Optional[uint32] = params.get_uint32_optional("end_height")
+        if end_height is not None:
+            kwargs["end_height"] = end_height
 
-        if "include_spent_coins" in request:
-            kwargs["include_spent_coins"] = request["include_spent_coins"]
+        include_spent_coins: Optional[bool] = params.get_bool_optional("include_spent_coins")
+        if include_spent_coins is not None:
+            kwargs["include_spent_coins"] = include_spent_coins
 
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_names(**kwargs)
 
         return {"coin_records": [coin_record_dict_backwards_compat(cr.to_json_dict()) for cr in coin_records]}
 
-    async def get_coin_records_by_parent_ids(self, request: Dict) -> Optional[Dict]:
+    async def get_coin_records_by_parent_ids(self, params: RequestParams) -> Optional[Dict]:
         """
         Retrieves the coins for given parent coin IDs, by default returns unspent coins.
         """
-        if "parent_ids" not in request:
-            raise ValueError("Parent IDs not in request")
         kwargs: Dict[str, Any] = {
             "include_spent_coins": False,
-            "parent_ids": [hexstr_to_bytes(ph) for ph in request["parent_ids"]],
+            "parent_ids": params.get_hash_list("parent_ids"),
         }
-        if "start_height" in request:
-            kwargs["start_height"] = uint32(request["start_height"])
-        if "end_height" in request:
-            kwargs["end_height"] = uint32(request["end_height"])
+        start_height: Optional[uint32] = params.get_uint32_optional("start_height")
+        if start_height is not None:
+            kwargs["start_height"] = start_height
+        end_height: Optional[uint32] = params.get_uint32_optional("end_height")
+        if end_height is not None:
+            kwargs["end_height"] = end_height
 
-        if "include_spent_coins" in request:
-            kwargs["include_spent_coins"] = request["include_spent_coins"]
+        include_spent_coins: Optional[bool] = params.get_bool_optional("include_spent_coins")
+        if include_spent_coins is not None:
+            kwargs["include_spent_coins"] = include_spent_coins
 
         coin_records = await self.service.blockchain.coin_store.get_coin_records_by_parent_ids(**kwargs)
 
         return {"coin_records": [coin_record_dict_backwards_compat(cr.to_json_dict()) for cr in coin_records]}
 
-    async def push_tx(self, request: Dict) -> Optional[Dict]:
-        if "spend_bundle" not in request:
-            raise ValueError("Spend bundle not in request")
-
-        spend_bundle = SpendBundle.from_json_dict(request["spend_bundle"])
+    async def push_tx(self, params: RequestParams) -> Optional[Dict]:
+        spend_bundle_dict: Dict[str, Any] = params.get_dict("spend_bundle")
+        spend_bundle = SpendBundle.from_json_dict(spend_bundle_dict)
         spend_name = spend_bundle.name()
 
         if self.service.mempool_manager.get_spendbundle(spend_name) is not None:
@@ -609,9 +579,9 @@ class FullNodeRpcApi:
             "status": status.name,
         }
 
-    async def get_puzzle_and_solution(self, request: Dict) -> Optional[Dict]:
-        coin_name: bytes32 = bytes32.from_hexstr(request["coin_id"])
-        height = request["height"]
+    async def get_puzzle_and_solution(self, params: RequestParams) -> Optional[Dict]:
+        coin_name: bytes32 = params.get_hash("coin_id")
+        height: uint32 = params.get_uint32("height")
         coin_record = await self.service.coin_store.get_coin_record(coin_name)
         if coin_record is None or not coin_record.spent or coin_record.spent_block_index != height:
             raise ValueError(f"Invalid height {height}. coin record {coin_record}")
@@ -635,11 +605,8 @@ class FullNodeRpcApi:
         solution_ser: SerializedProgram = SerializedProgram.from_program(Program.to(solution))
         return {"coin_solution": CoinSpend(coin_record.coin, puzzle_ser, solution_ser)}
 
-    async def get_additions_and_removals(self, request: Dict) -> Optional[Dict]:
-        if "header_hash" not in request:
-            raise ValueError("No header_hash in request")
-        header_hash = bytes32.from_hexstr(request["header_hash"])
-
+    async def get_additions_and_removals(self, params: RequestParams) -> Optional[Dict]:
+        header_hash: bytes32 = params.get_hash("header_hash")
         block: Optional[FullBlock] = await self.service.block_store.get_full_block(header_hash)
         if block is None:
             raise ValueError(f"Block {header_hash.hex()} not found")
@@ -652,21 +619,18 @@ class FullNodeRpcApi:
 
         return {"additions": additions, "removals": removals}
 
-    async def get_all_mempool_tx_ids(self, request: Dict) -> Optional[Dict]:
+    async def get_all_mempool_tx_ids(self, _: RequestParams) -> Optional[Dict]:
         ids = list(self.service.mempool_manager.mempool.spends.keys())
         return {"tx_ids": ids}
 
-    async def get_all_mempool_items(self, request: Dict) -> Optional[Dict]:
+    async def get_all_mempool_items(self, _: RequestParams) -> Optional[Dict]:
         spends = {}
         for tx_id, item in self.service.mempool_manager.mempool.spends.items():
             spends[tx_id.hex()] = item
         return {"mempool_items": spends}
 
-    async def get_mempool_item_by_tx_id(self, request: Dict) -> Optional[Dict]:
-        if "tx_id" not in request:
-            raise ValueError("No tx_id in request")
-        tx_id: bytes32 = bytes32.from_hexstr(request["tx_id"])
-
+    async def get_mempool_item_by_tx_id(self, params: RequestParams) -> Optional[Dict]:
+        tx_id: bytes32 = params.get_hash("tx_id")
         item = self.service.mempool_manager.get_mempool_item(tx_id)
         if item is None:
             raise ValueError(f"Tx id 0x{tx_id.hex()} not in the mempool")

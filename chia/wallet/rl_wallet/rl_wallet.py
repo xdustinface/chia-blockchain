@@ -224,17 +224,17 @@ class RLWallet:
         self,
         interval: uint64,
         limit: uint64,
-        origin_parent_id: str,
-        origin_puzzle_hash: str,
+        origin_parent_id: bytes32,
+        origin_puzzle_hash: bytes32,
         origin_amount: uint64,
-        admin_pubkey: str,
+        admin_pubkey: G1Element,
     ) -> None:
-        admin_pubkey_bytes = hexstr_to_bytes(admin_pubkey)
+        admin_pubkey_bytes = bytes(admin_pubkey)
 
         assert self.rl_info.user_pubkey is not None
         origin = Coin(
-            bytes32(hexstr_to_bytes(origin_parent_id)),
-            bytes32(hexstr_to_bytes(origin_puzzle_hash)),
+            origin_parent_id,
+            origin_puzzle_hash,
             origin_amount,
         )
         rl_puzzle = rl_puzzle_for_pk(
