@@ -49,7 +49,7 @@ unhashable_types = [
 big_ints = [uint64, int64, uint128, int512]
 
 
-def dataclass_from_dict(klass, d):
+def dataclass_from_dict(klass, d, trace: List[str]):
     """
     Converts a dictionary based on a dataclass, into an instance of that dataclass.
     Recursively goes through lists, optionals, and dictionaries.
@@ -58,22 +58,25 @@ def dataclass_from_dict(klass, d):
         # Type is optional, data is either None, or Any
         if not d:
             return None
-        return dataclass_from_dict(get_args(klass)[0], d)
+        return dataclass_from_dict(get_args(klass)[0], d, trace)
     elif is_type_Tuple(klass):
         # Type is tuple, can have multiple different types inside
         i = 0
         klass_properties = []
         for item in d:
-            klass_properties.append(dataclass_from_dict(klass.__args__[i], item))
+            klass_properties.append(dataclass_from_dict(klass.__args__[i], item, [*trace, str(i)]))
             i = i + 1
         return tuple(klass_properties)
     elif dataclasses.is_dataclass(klass):
         # Type is a dataclass, data is a dictionary
         fieldtypes = {f.name: f.type for f in dataclasses.fields(klass)}
-        return klass(**{f: dataclass_from_dict(fieldtypes[f], d[f]) for f in d})
+        return klass(**{f: dataclass_from_dict(fieldtypes[f], d[f], [*trace, f]) for f in d})
     elif is_type_List(klass):
         # Type is a list, data is a list
-        return [dataclass_from_dict(get_args(klass)[0], item) for item in d]
+        parsed_list: List = []
+        for i in range(0, len(d)):
+            parsed_list.append(dataclass_from_dict(get_args(klass)[0], d[i], [*trace, str(i)]))
+        return parsed_list
     elif issubclass(klass, bytes):
         # Type is bytes, data is a hex string
         return klass(hexstr_to_bytes(d))
@@ -383,4 +386,4 @@ class Streamable:
 
     @classmethod
     def from_json_dict(cls: Any, json_dict: Dict) -> Any:
-        return dataclass_from_dict(cls, json_dict)
+        return dataclass_from_dict(cls, json_dict, [cls.__name__])
