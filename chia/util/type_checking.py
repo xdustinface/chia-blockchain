@@ -1,6 +1,7 @@
 import dataclasses
 import sys
 from typing import Any, List, Optional, Tuple, Type, Union
+from chia.util.streamable_errors import ConversionError, InvalidTypeError, InvalidSizeError, ParameterMissingError
 
 if sys.version_info < (3, 8):
 
@@ -40,15 +41,15 @@ def strictdataclass(cls: Any):
         bytes can be passed in and the type can be constructed.
         """
 
-        def parse_item(self, item: Any, f_name: str, f_type: Type) -> Any:
+        def parse_item(self, item: Any, f_name: str, f_type: Type, trace: List[str]) -> Any:
             if is_type_List(f_type):
                 collected_list: List = []
                 inner_type: Type = get_args(f_type)[0]
                 # wjb assert inner_type != get_args(List)[0]  # type: ignore
                 if not is_type_List(type(item)):
-                    raise ValueError(f"Wrong type for {f_name}, need a list.")
+                    raise InvalidTypeError(item, list, type(item), trace)
                 for el in item:
-                    collected_list.append(self.parse_item(el, f_name, inner_type))
+                    collected_list.append(self.parse_item(el, f_name, inner_type, [*trace, str(len(collected_list))]))
                 return collected_list
             if is_type_SpecificOptional(f_type):
                 if item is None:
@@ -58,14 +59,14 @@ def strictdataclass(cls: Any):
                     return self.parse_item(item, f_name, inner_type)
             if is_type_Tuple(f_type):
                 collected_list = []
-                if not is_type_Tuple(type(item)) and not is_type_List(type(item)):
-                    raise ValueError(f"Wrong type for {f_name}, need a tuple.")
+                if not is_type_Tuple(type(item)):
+                    raise InvalidTypeError(item, tuple, type(item), trace)
                 if len(item) != len(get_args(f_type)):
-                    raise ValueError(f"Wrong number of elements in tuple {f_name}.")
+                    raise InvalidSizeError(item, len(get_args(f_type)), len(item), [*trace, f_name])
                 for i in range(len(item)):
                     inner_type = get_args(f_type)[i]
                     tuple_item = item[i]
-                    collected_list.append(self.parse_item(tuple_item, f_name, inner_type))
+                    collected_list.append(self.parse_item(tuple_item, f_name, inner_type, [*trace, str(i)]))
                 return tuple(collected_list)
             if not isinstance(item, f_type):
                 try:
@@ -90,10 +91,10 @@ def strictdataclass(cls: Any):
                     raise ValueError(f"Field {f_name} not present")
                 try:
                     if not isinstance(data[f_name], f_type):
-                        object.__setattr__(self, f_name, self.parse_item(data[f_name], f_name, f_type))
+                        object.__setattr__(self, f_name, self.parse_item(data[f_name], f_name, f_type, [self.__class__.__name__]))
                 except TypeError:
                     # Throws a TypeError because we cannot call isinstance for subscripted generics like Optional[int]
-                    object.__setattr__(self, f_name, self.parse_item(data[f_name], f_name, f_type))
+                    object.__setattr__(self, f_name, self.parse_item(data[f_name], f_name, f_type, [self.__class__.__name__]))
 
     class NoTypeChecking:
         __no_type_check__ = True

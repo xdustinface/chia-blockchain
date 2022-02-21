@@ -1,3 +1,4 @@
+import pytest
 import unittest
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
@@ -26,6 +27,7 @@ from chia.util.streamable import (
     parse_size_hints,
     parse_str,
 )
+from chia.util.streamable_errors import ParameterMissingError, InvalidSizeError, ConversionError
 from tests.setup_nodes import bt, test_constants
 
 
@@ -73,6 +75,17 @@ class TestStreamable(unittest.TestCase):
 
         dict_block = block.to_json_dict()
         assert FullBlock.from_json_dict(dict_block) == block
+
+
+    def test_json_parameter_missing(self) -> None:
+        @dataclass(frozen=True)
+        @streamable
+        class TestClass(Streamable):
+            a: str
+
+        with raises(ParameterMissingError) as exc_info:
+            TestClass.from_json_dict({})
+        assert exc_info.value.trace == [TestClass.__name__, "a"]
 
     def test_recursive_json(self):
         @dataclass(frozen=True)
@@ -372,6 +385,27 @@ class TestStreamable(unittest.TestCase):
         # EOF off by one
         with raises(AssertionError):
             parse_str(io.BytesIO(b"\x00\x00\x02\x01" + b"a" * 512))
+
+
+@pytest.mark.parametrize(
+    "json_in,expected_trace,exception_type",
+    [
+        ({"a": (-1, (0, -1), 0)}, ["TestClass", "a", "0"], ConversionError),
+        ({"a": (0,)}, ["TestClass", "a"], InvalidSizeError),
+        ({"a": (0, (-1, 0), 0)}, ["TestClass", "a", "1", "0"], ConversionError),
+        ({"a": (0, (0, -1), 0)}, ["TestClass", "a", "1", "1"], ConversionError),
+        ({"a": (0, (0, 0), -1)}, ["TestClass", "a", "2"], ConversionError),
+    ],
+)
+def test_json_trace_tuple(json_in, expected_trace, exception_type) -> None:
+    @dataclass(frozen=True)
+    @streamable
+    class TestClass(Streamable):
+        a: Tuple[uint8, Tuple[uint8, uint8], uint8]
+
+    with raises(exception_type) as exc_info:
+        TestClass.from_json_dict(json_in)
+    assert exc_info.value.trace == expected_trace
 
 
 if __name__ == "__main__":

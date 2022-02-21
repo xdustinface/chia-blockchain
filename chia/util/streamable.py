@@ -16,6 +16,7 @@ from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.hash import std_hash
 from chia.util.ints import int64, int512, uint32, uint64, uint128
+from chia.util.streamable_errors import ConversionError, InvalidTypeError, ParameterMissingError
 from chia.util.type_checking import is_type_List, is_type_SpecificOptional, is_type_Tuple, strictdataclass
 
 if sys.version_info < (3, 8):
@@ -61,6 +62,8 @@ def dataclass_from_dict(klass, d, trace: List[str]):
         return dataclass_from_dict(get_args(klass)[0], d, trace)
     elif is_type_Tuple(klass):
         # Type is tuple, can have multiple different types inside
+        if type(d) != tuple:
+            raise InvalidTypeError(d, tuple, type(d), trace)
         i = 0
         klass_properties = []
         for item in d:
@@ -69,23 +72,57 @@ def dataclass_from_dict(klass, d, trace: List[str]):
         return tuple(klass_properties)
     elif dataclasses.is_dataclass(klass):
         # Type is a dataclass, data is a dictionary
-        fieldtypes = {f.name: f.type for f in dataclasses.fields(klass)}
-        return klass(**{f: dataclass_from_dict(fieldtypes[f], d[f], [*trace, f]) for f in d})
+        if type(d) != dict:
+            raise InvalidTypeError(d, dict, type(d), trace)
+        fields = dataclasses.fields(klass)
+        fieldtypes = {field.name: field.type for field in fields}
+        metadata = {field.name: field.metadata for field in fields}
+        kwargs: Dict[str, Any] = {}
+        for field_name, field_type in fieldtypes.items():
+            if field_name not in d:
+                if not is_type_SpecificOptional(field_type):
+                    raise ParameterMissingError([*trace, field_name])
+                else:
+                    kwargs[field_name] = None
+            else:
+                kwargs[field_name] = dataclass_from_dict(
+                    fieldtypes[field_name], d[field_name], [*trace, field_name]
+                )
+        return klass(**kwargs)
     elif is_type_List(klass):
         # Type is a list, data is a list
+        if list(d) != list:
+            raise InvalidTypeError(d, dict, type(d), trace)
         parsed_list: List = []
         for i in range(0, len(d)):
             parsed_list.append(dataclass_from_dict(get_args(klass)[0], d[i], [*trace, str(i)]))
         return parsed_list
     elif issubclass(klass, bytes):
         # Type is bytes, data is a hex string
-        return klass(hexstr_to_bytes(d))
+        if type(d) != str:
+            raise InvalidTypeError(d, str, type(d), trace)
+        try:
+            return klass(hexstr_to_bytes(d))
+        except Exception:
+            raise ConversionError(d, klass, trace)
     elif klass.__name__ in unhashable_types:
         # Type is unhashable (bls type), so cast from hex string
-        return klass.from_bytes(hexstr_to_bytes(d))
+        if type(d) != str:
+            raise InvalidTypeError(d, str, type(d), trace)
+        try:
+            parsed_bytes = hexstr_to_bytes(d)
+        except Exception:
+            raise ConversionError(d, bytes, trace)
+        try:
+            return klass.from_bytes(parsed_bytes)
+        except Exception:
+            raise ConversionError(d, klass, trace)
     else:
         # Type is a primitive, cast with correct class
-        return klass(d)
+        try:
+            return klass(d)
+        except Exception:
+            raise ConversionError(d, klass, trace)
 
 
 def recurse_jsonify(d):
