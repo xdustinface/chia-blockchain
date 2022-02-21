@@ -2,8 +2,8 @@ import math
 import time
 from dataclasses import dataclass
 
+from chia.streamable import Streamable, streamable
 from chia.util.ints import uint32, uint64
-from chia.util.streamable import Streamable, streamable
 
 
 @dataclass(frozen=True)

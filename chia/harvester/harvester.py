@@ -17,7 +17,7 @@ from chia.plotting.util import (
     PlotRefreshResult,
     PlotRefreshEvents,
 )
-from chia.util.streamable import dataclass_from_dict
+from chia.streamable import dataclass_from_dict
 
 log = logging.getLogger(__name__)
 

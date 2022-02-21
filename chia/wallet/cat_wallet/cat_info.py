@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 from chia.types.blockchain_format.program import Program
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.wallet.lineage_proof import LineageProof
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 
 
 @dataclass(frozen=True)

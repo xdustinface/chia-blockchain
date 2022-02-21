@@ -6,7 +6,7 @@ from chia.types.blockchain_format.sub_epoch_summary import SubEpochSummary
 from pathlib import Path
 import aiofiles
 from dataclasses import dataclass
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 from chia.util.files import write_file_async
 from chia.util.db_wrapper import DBWrapper
 

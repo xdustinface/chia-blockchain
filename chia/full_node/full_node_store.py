@@ -14,6 +14,7 @@ from chia.consensus.pot_iterations import calculate_sp_interval_iters
 from chia.full_node.signage_point import SignagePoint
 from chia.protocols import timelord_protocol
 from chia.server.outbound_message import Message
+from chia.streamable import Streamable, streamable
 from chia.types.blockchain_format.classgroup import ClassgroupElement
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.blockchain_format.sub_epoch_summary import SubEpochSummary
@@ -24,7 +25,6 @@ from chia.types.generator_types import CompressorArg
 from chia.types.unfinished_block import UnfinishedBlock
 from chia.util.ints import uint8, uint32, uint64, uint128
 from chia.util.lru_cache import LRUCache
-from chia.util.streamable import Streamable, streamable
 
 log = logging.getLogger(__name__)
 

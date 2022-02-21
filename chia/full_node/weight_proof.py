@@ -40,7 +40,7 @@ from chia.types.weight_proof import (
 from chia.util.block_cache import BlockCache
 from chia.util.hash import std_hash
 from chia.util.ints import uint8, uint32, uint64, uint128
-from chia.util.streamable import dataclass_from_dict, recurse_jsonify
+from chia.streamable import dataclass_from_dict, recurse_jsonify
 
 log = logging.getLogger(__name__)
 

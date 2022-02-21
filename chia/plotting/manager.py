@@ -22,7 +22,7 @@ from chia.plotting.util import (
 from chia.util.generator_tools import list_to_batches
 from chia.util.ints import uint16
 from chia.util.path import mkdir
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 from chia.types.blockchain_format.proof_of_space import ProofOfSpace
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.wallet.derive_keys import master_sk_to_local_sk

@@ -7,7 +7,7 @@ from chia.types.blockchain_format.reward_chain_block import RewardChainBlock
 from chia.types.blockchain_format.vdf import VDFProof
 from chia.types.end_of_slot_bundle import EndOfSubSlotBundle
 from chia.util.ints import uint32
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 
 
 @dataclass(frozen=True)

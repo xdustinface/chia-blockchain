@@ -33,7 +33,7 @@ from chia.util.errors import Err, ValidationError
 from chia.util.generator_tools import additions_for_npc
 from chia.util.ints import uint32, uint64
 from chia.util.lru_cache import LRUCache
-from chia.util.streamable import recurse_jsonify
+from chia.streamable import recurse_jsonify
 
 log = logging.getLogger(__name__)
 

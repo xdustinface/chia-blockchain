@@ -10,7 +10,7 @@ from utils import EnumType, rand_bytes, rand_full_block, rand_hash
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.full_block import FullBlock
 from chia.util.ints import uint8, uint64
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 
 
 @dataclass(frozen=True)

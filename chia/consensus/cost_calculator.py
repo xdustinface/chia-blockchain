@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
+from chia.streamable import Streamable, streamable
 from chia.types.name_puzzle_condition import NPC
 from chia.util.ints import uint16, uint64
-from chia.util.streamable import Streamable, streamable
 
 
 @dataclass(frozen=True)

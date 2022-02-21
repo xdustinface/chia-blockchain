@@ -10,7 +10,7 @@ from chia.types.blockchain_format.program import Program
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.ints import uint32, uint8
-from chia.util.streamable import streamable, Streamable, dataclass_from_dict
+from chia.streamable import streamable, Streamable, dataclass_from_dict
 
 
 class PoolSingletonState(IntEnum):

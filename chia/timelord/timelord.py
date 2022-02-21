@@ -17,6 +17,7 @@ from chia.protocols import timelord_protocol
 from chia.protocols.protocol_message_types import ProtocolMessageTypes
 from chia.server.outbound_message import NodeType, make_msg
 from chia.server.server import ChiaServer
+from chia.streamable import Streamable, streamable
 from chia.timelord.iters_from_block import iters_from_block
 from chia.timelord.timelord_state import LastState
 from chia.timelord.types import Chain, IterationType, StateType
@@ -33,7 +34,6 @@ from chia.types.blockchain_format.sub_epoch_summary import SubEpochSummary
 from chia.types.blockchain_format.vdf import VDFInfo, VDFProof
 from chia.types.end_of_slot_bundle import EndOfSubSlotBundle
 from chia.util.ints import uint8, uint16, uint32, uint64, uint128
-from chia.util.streamable import Streamable, streamable
 
 log = logging.getLogger(__name__)
 

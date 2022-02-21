@@ -11,7 +11,7 @@ from chia.consensus.constants import ConsensusConstants
 from chia.types.blockchain_format.classgroup import ClassgroupElement
 from chia.types.blockchain_format.sized_bytes import bytes32, bytes100
 from chia.util.ints import uint8, uint64
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 
 log = logging.getLogger(__name__)
 

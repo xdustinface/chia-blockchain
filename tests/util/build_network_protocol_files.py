@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from chia.util.streamable import Streamable, streamable
+from chia.streamable import Streamable, streamable
 from tests.util.network_protocol_data import *
 from chia.util.ints import uint32
 
