@@ -10,11 +10,11 @@ from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tupl
 from blspy import G1Element, G2Element, PrivateKey
 from typing_extensions import Literal
 
+from chia.streamable.type_checking import is_type_List, is_type_SpecificOptional, is_type_Tuple, strictdataclass
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.util.byte_types import hexstr_to_bytes
 from chia.util.hash import std_hash
 from chia.util.ints import int64, int512, uint32, uint64, uint128
-from chia.util.type_checking import is_type_List, is_type_SpecificOptional, is_type_Tuple, strictdataclass
 
 if sys.version_info < (3, 8):
 
