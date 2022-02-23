@@ -1,6 +1,6 @@
 import dataclasses
 import sys
-from typing import Any, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 if sys.version_info < (3, 8):
 
@@ -14,20 +14,28 @@ else:
 
     from typing import get_args, get_origin
 
+cache: Dict[Type, Optional[Type[Any]]] = {}
+
+
+def get_cached_origin(t: Type) -> Optional[Type[Any]]:
+    if t not in cache:
+        cache[t] = get_origin(t)
+    return cache[t]
+
 
 def is_type_List(f_type: Type) -> bool:
-    return get_origin(f_type) == list or f_type == list
+    return get_cached_origin(f_type) == list or f_type == list
 
 
 def is_type_SpecificOptional(f_type) -> bool:
     """
     Returns true for types such as Optional[T], but not Optional, or T.
     """
-    return get_origin(f_type) == Union and get_args(f_type)[1]() is None
+    return get_cached_origin(f_type) == Union and get_args(f_type)[1]() is None
 
 
 def is_type_Tuple(f_type: Type) -> bool:
-    return get_origin(f_type) == tuple or f_type == tuple
+    return get_cached_origin(f_type) == tuple or f_type == tuple
 
 
 def strictdataclass(cls: Any):
