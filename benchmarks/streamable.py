@@ -13,14 +13,14 @@ from chia.util.ints import uint8, uint64
 from chia.util.streamable import Streamable, streamable
 
 
-@dataclass(frozen=True)
 @streamable
+@dataclass(frozen=True)
 class BenchmarkInner(Streamable):
     a: str
 
 
-@dataclass(frozen=True)
 @streamable
+@dataclass(frozen=True)
 class BenchmarkMiddle(Streamable):
     a: uint64
     b: List[bytes32]
@@ -29,8 +29,8 @@ class BenchmarkMiddle(Streamable):
     e: BenchmarkInner
 
 
-@dataclass(frozen=True)
 @streamable
+@dataclass(frozen=True)
 class BenchmarkClass(Streamable):
     a: Optional[BenchmarkMiddle]
     b: Optional[BenchmarkMiddle]

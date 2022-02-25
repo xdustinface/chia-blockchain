@@ -1,6 +1,6 @@
 import unittest
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import io
 
 from clvm_tools import binutils
@@ -25,14 +25,147 @@ from chia.util.streamable import (
     parse_tuple,
     parse_size_hints,
     parse_str,
+    is_type_List,
+    is_type_SpecificOptional,
 )
 from tests.setup_nodes import bt, test_constants
 
 
+def test_int_not_supported() -> None:
+    with raises(NotImplementedError):
+
+        @streamable
+        @dataclass(frozen=True)
+        class TestClassInt(Streamable):
+            a: int
+
+
+def test_float_not_supported() -> None:
+    with raises(NotImplementedError):
+
+        @streamable
+        @dataclass(frozen=True)
+        class TestClassFloat(Streamable):
+            a: float
+
+
+def test_dict_not_suppported() -> None:
+    with raises(NotImplementedError):
+
+        @streamable
+        @dataclass(frozen=True)
+        class TestClassDict(Streamable):
+            a: Dict[str, str]
+
+
+def test_pure_dataclass_not_supported() -> None:
+    @dataclass(frozen=True)
+    class DataClassOnly:
+        a: uint8
+
+    with raises(NotImplementedError):
+
+        @streamable
+        @dataclass(frozen=True)
+        class TestClassDataclass(Streamable):
+            a: DataClassOnly
+
+
+def test_plain_class_not_supported() -> None:
+    class PlainClass:
+        a: uint8
+
+    with raises(NotImplementedError):
+
+        @streamable
+        @dataclass(frozen=True)
+        class TestClassPlain(Streamable):
+            a: PlainClass
+
+
+class TestIsTypeList(unittest.TestCase):
+    def test_basic_list(self):
+        a = [1, 2, 3]
+        assert is_type_List(type(a))
+        assert is_type_List(List)
+        assert is_type_List(List[int])
+        assert is_type_List(List[uint8])
+        assert is_type_List(list)
+        assert not is_type_List(Tuple)
+        assert not is_type_List(tuple)
+        assert not is_type_List(dict)
+
+    def test_not_lists(self):
+        assert not is_type_List(Dict)
+
+
+class TestIsTypeSpecificOptional(unittest.TestCase):
+    def test_basic_optional(self):
+        assert is_type_SpecificOptional(Optional[int])
+        assert is_type_SpecificOptional(Optional[Optional[int]])
+        assert not is_type_SpecificOptional(List[int])
+
+
+class TestStrictClass(unittest.TestCase):
+    def test_StrictDataClass(self):
+        @streamable
+        @dataclass(frozen=True)
+        class TestClass1(Streamable):
+            a: uint8
+            b: str
+
+        good: TestClass1 = TestClass1(24, "!@12")
+        assert TestClass1.__name__ == "TestClass1"
+        assert good
+        assert good.a == 24
+        assert good.b == "!@12"
+        good2 = TestClass1(52, bytes([1, 2, 3]))
+        assert good2.b == str(bytes([1, 2, 3]))
+
+    def test_StrictDataClassBad(self):
+        @streamable
+        @dataclass(frozen=True)
+        class TestClass2(Streamable):
+            a: uint8
+            b = 0
+
+        assert TestClass2(25)
+
+        with raises(TypeError):
+            TestClass2(1, 2)
+
+    def test_StrictDataClassLists(self):
+        @streamable
+        @dataclass(frozen=True)
+        class TestClass(Streamable):
+            a: List[uint8]
+            b: List[List[uint8]]
+
+        assert TestClass([1, 2, 3], [[uint8(200), uint8(25)], [uint8(25)]])
+
+        with raises(ValueError):
+            TestClass({"1": 1}, [[uint8(200), uint8(25)], [uint8(25)]])
+
+        with raises(ValueError):
+            TestClass([1, 2, 3], [uint8(200), uint8(25)])
+
+    def test_StrictDataClassOptional(self):
+        @streamable
+        @dataclass(frozen=True)
+        class TestClass(Streamable):
+            a: Optional[uint8]
+            b: Optional[uint8]
+            c: Optional[Optional[uint8]]
+            d: Optional[Optional[uint8]]
+
+        good = TestClass(12, None, 13, None)
+        assert good
+
+
 class TestStreamable(unittest.TestCase):
     def test_basic(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClass(Streamable):
             a: uint32
             b: uint32
@@ -48,8 +181,8 @@ class TestStreamable(unittest.TestCase):
         assert a == TestClass.from_bytes(b)
 
     def test_variablesize(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClass2(Streamable):
             a: uint32
             b: uint32
@@ -60,8 +193,8 @@ class TestStreamable(unittest.TestCase):
 
         with raises(NotImplementedError):
 
-            @dataclass(frozen=True)
             @streamable
+            @dataclass(frozen=True)
             class TestClass3(Streamable):
                 a: int
 
@@ -72,13 +205,13 @@ class TestStreamable(unittest.TestCase):
         assert FullBlock.from_json_dict(dict_block) == block
 
     def test_recursive_json(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClass1(Streamable):
             a: List[uint32]
 
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClass2(Streamable):
             a: uint32
             b: List[Optional[List[TestClass1]]]
@@ -101,8 +234,8 @@ class TestStreamable(unittest.TestCase):
         with raises(AssertionError):
             SubEpochChallengeSegment.from_bytes(b"\x00\x00\x00\x03\xff\xff\xff\xff")
 
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassOptional(Streamable):
             a: Optional[uint8]
 
@@ -114,8 +247,8 @@ class TestStreamable(unittest.TestCase):
         TestClassOptional.from_bytes(bytes([1, 2]))
 
     def test_ambiguous_deserialization_int(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassUint(Streamable):
             a: uint32
 
@@ -124,8 +257,8 @@ class TestStreamable(unittest.TestCase):
             TestClassUint.from_bytes(b"\x00\x00")
 
     def test_ambiguous_deserialization_list(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassList(Streamable):
             a: List[uint8]
 
@@ -134,8 +267,8 @@ class TestStreamable(unittest.TestCase):
             TestClassList.from_bytes(bytes([0, 0, 100, 24]))
 
     def test_ambiguous_deserialization_tuple(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassTuple(Streamable):
             a: Tuple[uint8, str]
 
@@ -144,8 +277,8 @@ class TestStreamable(unittest.TestCase):
             TestClassTuple.from_bytes(bytes([0, 0, 100, 24]))
 
     def test_ambiguous_deserialization_str(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassStr(Streamable):
             a: str
 
@@ -154,8 +287,8 @@ class TestStreamable(unittest.TestCase):
             TestClassStr.from_bytes(bytes([0, 0, 100, 24, 52]))
 
     def test_ambiguous_deserialization_bytes(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassBytes(Streamable):
             a: bytes
 
@@ -170,8 +303,8 @@ class TestStreamable(unittest.TestCase):
         TestClassBytes.from_bytes(bytes([0, 0, 0, 2, 52, 21]))
 
     def test_ambiguous_deserialization_bool(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassBool(Streamable):
             a: bool
 
@@ -183,8 +316,8 @@ class TestStreamable(unittest.TestCase):
         TestClassBool.from_bytes(bytes([1]))
 
     def test_ambiguous_deserialization_program(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class TestClassProgram(Streamable):
             a: Program
 
@@ -196,8 +329,8 @@ class TestStreamable(unittest.TestCase):
             TestClassProgram.from_bytes(bytes(program) + b"9")
 
     def test_streamable_empty(self):
-        @dataclass(frozen=True)
         @streamable
+        @dataclass(frozen=True)
         class A(Streamable):
             pass
 
@@ -369,6 +502,45 @@ class TestStreamable(unittest.TestCase):
         # EOF off by one
         with raises(AssertionError):
             parse_str(io.BytesIO(b"\x00\x00\x02\x01" + b"a" * 512))
+
+
+def test_wrong_decorator_order():
+
+    with raises(SyntaxError):
+
+        @dataclass(frozen=True)
+        @streamable
+        class WrongDecoratorOrder(Streamable):
+            pass
+
+
+def test_dataclass_not_frozen():
+
+    with raises(SyntaxError):
+
+        @streamable
+        @dataclass(frozen=False)
+        class DataclassNotFrozen(Streamable):
+            pass
+
+
+def test_dataclass_missing():
+
+    with raises(SyntaxError):
+
+        @streamable
+        class DataclassMissing(Streamable):
+            pass
+
+
+def test_streamable_inheritance_missing():
+
+    with raises(SyntaxError):
+
+        @streamable
+        @dataclass(frozen=True)
+        class StreamableInheritanceMissing:
+            pass
 
 
 if __name__ == "__main__":
