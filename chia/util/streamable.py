@@ -48,40 +48,81 @@ big_ints = [uint64, int64, uint128, int512]
 _T_Streamable = TypeVar("_T_Streamable", bound="Streamable")
 
 
-def dataclass_from_dict(klass, d):
+def convert_optional(convert_func: Callable[[Any], Any], item: Any) -> Any:
+    if item is None:
+        return None
+    return convert_func(item)
+
+
+def convert_tuple(convert_funcs: List[Callable[[Any], Any]], items: Tuple[Any, ...]) -> Tuple[Any, ...]:
+    tuple_data = []
+    for i in range(len(items)):
+        tuple_data.append(convert_funcs[i](items[i]))
+    return tuple(tuple_data)
+
+
+def convert_dataclass(
+    f_type: Type[_T_Streamable], convert_funcs: Dict[str, Callable[[Any], Any]], item: Dict[str, Any]
+) -> _T_Streamable:
+    kwargs = {}
+    for name, convert_func in convert_funcs.items():
+        kwargs[name] = convert_func(item[name])
+    return f_type(**kwargs)
+
+
+def convert_list(convert_func: Callable[[Any], Any], items: List[Any]) -> List[Any]:
+    list_data = []
+    for item in items:
+        list_data.append(convert_func(item))
+    return list_data
+
+
+def dataclass_from_dict(klass: Type[Any], item: Any) -> Any:
+    obj = object.__new__(klass)
+    try:
+        fields = FIELDS_FOR_STREAMABLE_CLASS[klass]
+        convert_funcs = CONVERT_FUNCTIONS_FOR_STREAMABLE_CLASS[klass]
+    except Exception:
+        fields = {}
+        convert_funcs = []
+    for field, convert_func in zip(fields, convert_funcs):
+        object.__setattr__(obj, field, convert_func(item[field]))
+    return obj
+
+
+def function_to_convert_one_item(f_type) -> Callable[[Any], Any]:
     """
     Converts a dictionary based on a dataclass, into an instance of that dataclass.
     Recursively goes through lists, optionals, and dictionaries.
     """
-    if is_type_SpecificOptional(klass):
-        # Type is optional, data is either None, or Any
-        if not d:
-            return None
-        return dataclass_from_dict(get_args(klass)[0], d)
-    elif is_type_Tuple(klass):
-        # Type is tuple, can have multiple different types inside
-        i = 0
-        klass_properties = []
-        for item in d:
-            klass_properties.append(dataclass_from_dict(klass.__args__[i], item))
-            i = i + 1
-        return tuple(klass_properties)
-    elif dataclasses.is_dataclass(klass):
+    if is_type_SpecificOptional(f_type):
+        convert_inner_func = function_to_convert_one_item(get_args(f_type)[0])
+        return lambda item: convert_optional(convert_inner_func, item)
+    elif is_type_Tuple(f_type):
+        args = get_args(f_type)
+        convert_inner_tuple_funcs = []
+        for arg in args:
+            convert_inner_tuple_funcs.append(function_to_convert_one_item(arg))
+        return lambda item: convert_tuple(convert_inner_tuple_funcs, item)
+    elif is_type_List(f_type):
+        inner_type = get_args(f_type)[0]
+        convert_inner_func = function_to_convert_one_item(inner_type)
+        return lambda items: convert_list(convert_inner_func, items)
+    elif dataclasses.is_dataclass(f_type):
         # Type is a dataclass, data is a dictionary
-        fieldtypes = {f.name: f.type for f in dataclasses.fields(klass)}
-        return klass(**{f: dataclass_from_dict(fieldtypes[f], d[f]) for f in d})
-    elif is_type_List(klass):
-        # Type is a list, data is a list
-        return [dataclass_from_dict(get_args(klass)[0], item) for item in d]
-    elif issubclass(klass, bytes):
+        convert_dataclass_inner_funcs: Dict[str, Callable[[Any], Any]] = {}
+        for field in dataclasses.fields(f_type):
+            convert_dataclass_inner_funcs[field.name] = function_to_convert_one_item(field.type)
+        return lambda item: convert_dataclass(f_type, convert_dataclass_inner_funcs, item)
+    elif issubclass(f_type, bytes):
         # Type is bytes, data is a hex string
-        return klass(hexstr_to_bytes(d))
-    elif klass.__name__ in unhashable_types:
+        return lambda item: f_type(hexstr_to_bytes(item))
+    elif f_type.__name__ in unhashable_types:
         # Type is unhashable (bls type), so cast from hex string
-        return klass.from_bytes(hexstr_to_bytes(d))
+        return lambda item: f_type.from_bytes(hexstr_to_bytes(item))
     else:
         # Type is a primitive, cast with correct class
-        return klass(d)
+        return lambda item: f_type(item)
 
 
 def recurse_jsonify(d):
@@ -126,6 +167,7 @@ def recurse_jsonify(d):
 
 STREAM_FUNCTIONS_FOR_STREAMABLE_CLASS = {}
 PARSE_FUNCTIONS_FOR_STREAMABLE_CLASS = {}
+CONVERT_FUNCTIONS_FOR_STREAMABLE_CLASS = {}
 FIELDS_FOR_STREAMABLE_CLASS = {}
 
 
@@ -182,6 +224,7 @@ def streamable(cls: Any):
 
     stream_functions = []
     parse_functions = []
+    convert_functions = []
     try:
         hints = get_type_hints(t)
         fields = {field.name: hints.get(field.name, field.type) for field in dataclasses.fields(t)}
@@ -193,9 +236,12 @@ def streamable(cls: Any):
     for _, f_type in fields.items():
         stream_functions.append(cls.function_to_stream_one_item(f_type))
         parse_functions.append(cls.function_to_parse_one_item(f_type))
+        convert_functions.append(function_to_convert_one_item(f_type))
 
     STREAM_FUNCTIONS_FOR_STREAMABLE_CLASS[t] = stream_functions
     PARSE_FUNCTIONS_FOR_STREAMABLE_CLASS[t] = parse_functions
+    CONVERT_FUNCTIONS_FOR_STREAMABLE_CLASS[t] = convert_functions
+
     return t
 
 
