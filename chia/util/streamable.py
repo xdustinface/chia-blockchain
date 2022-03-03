@@ -439,60 +439,17 @@ class Streamable:
     Make sure to use the streamable decorator when inheriting from the Streamable class to prepare the streaming caches.
     """
 
-    def post_init_parse(self, item: Any, f_name: str, f_type: Type[Any]) -> Any:
-        if is_type_List(f_type):
-            collected_list: List[Any] = []
-            inner_type: Type[Any] = get_args(f_type)[0]
-            # wjb assert inner_type != get_args(List)[0]  # type: ignore
-            if not is_type_List(type(item)):
-                raise ValueError(f"Wrong type for {f_name}, need a list.")
-            for el in item:
-                collected_list.append(self.post_init_parse(el, f_name, inner_type))
-            return collected_list
-        if is_type_SpecificOptional(f_type):
-            if item is None:
-                return None
-            else:
-                inner_type: Type = get_args(f_type)[0]  # type: ignore
-                return self.post_init_parse(item, f_name, inner_type)
-        if is_type_Tuple(f_type):
-            collected_list = []
-            if not is_type_Tuple(type(item)) and not is_type_List(type(item)):
-                raise ValueError(f"Wrong type for {f_name}, need a tuple.")
-            if len(item) != len(get_args(f_type)):
-                raise ValueError(f"Wrong number of elements in tuple {f_name}.")
-            for i in range(len(item)):
-                inner_type = get_args(f_type)[i]
-                tuple_item = item[i]
-                collected_list.append(self.post_init_parse(tuple_item, f_name, inner_type))
-            return tuple(collected_list)
-        if not isinstance(item, f_type):
-            try:
-                item = f_type(item)
-            except (TypeError, AttributeError, ValueError):
-                try:
-                    item = f_type.from_bytes(item)
-                except Exception:
-                    item = f_type.from_bytes(bytes(item))
-        if not isinstance(item, f_type):
-            raise ValueError(f"Wrong type for {f_name}")
-        return item
-
     def __post_init__(self) -> None:
-        try:
-            fields = FIELDS_FOR_STREAMABLE_CLASS[type(self)]
-        except Exception:
-            fields = {}
+        # TODO, Consider changing this __post_init__ so that i only validates types and raises for invalid types instead
+        #       of just converting everything. Would require fixing all places where we currently pass invalid types
+        #       directly or indirectly into streamable constructors.
+        fields = FIELDS_FOR_STREAMABLE_CLASS[type(self)]
+        convert_funcs = CONVERT_FUNCTIONS_FOR_STREAMABLE_CLASS[type(self)]
         data = self.__dict__
-        for (f_name, f_type) in fields.items():
+        for f_name, f_type, convert_func in zip(fields.keys(), fields.values(), convert_funcs):
             if f_name not in data:
                 raise ValueError(f"Field {f_name} not present")
-            try:
-                if not isinstance(data[f_name], f_type):
-                    object.__setattr__(self, f_name, self.post_init_parse(data[f_name], f_name, f_type))
-            except TypeError:
-                # Throws a TypeError because we cannot call isinstance for subscripted generics like Optional[int]
-                object.__setattr__(self, f_name, self.post_init_parse(data[f_name], f_name, f_type))
+            object.__setattr__(self, f_name, convert_func(data[f_name]))
 
     @classmethod
     def function_to_parse_one_item(cls, f_type: Type[Any]) -> Callable[[BinaryIO], Any]:
