@@ -17,6 +17,7 @@ from chia.types.weight_proof import SubEpochChallengeSegment
 from chia.util.ints import uint8, uint32, uint64
 from chia.util.streamable import (
     Streamable,
+    dataclass_from_dict,
     is_type_List,
     is_type_SpecificOptional,
     parse_bool,
@@ -89,6 +90,47 @@ def test_plain_class_not_supported() -> None:
             a: PlainClass
 
 
+@dataclass
+class TestDataclassFromDict1:
+    a: int
+    b: str
+
+
+@dataclass
+class TestDataclassFromDict2:
+    a: TestDataclassFromDict1
+    b: float
+
+
+def test_pure_dataclasses_in_dataclass_from_dict() -> None:
+
+    d1_dict = {"a": 1, "b": "2"}
+    d1_dict_invalid = {"a": "asdf", "b": "2"}
+
+    d1: TestDataclassFromDict1 = dataclass_from_dict(TestDataclassFromDict1, d1_dict)
+    assert d1.a == 1
+    assert d1.b == "2"
+
+    with raises(TypeError):
+        dataclass_from_dict(TestDataclassFromDict1, d1_dict_invalid)
+
+    d2_dict = {"a": d1, "b": 1.2345}
+    d2_dict_invalid_1 = {"a": "asdf", "b": 1.2345}
+    d2_dict_invalid_2 = {"a": 1.2345, "b": d1}
+    d2_dict_invalid_3 = {"a": d1, "b": d1}
+
+    d2: TestDataclassFromDict2 = dataclass_from_dict(TestDataclassFromDict2, d2_dict)
+    assert d2.a == d1
+    assert d2.b == 1.2345
+
+    with raises(TypeError):
+        dataclass_from_dict(TestDataclassFromDict2, d2_dict_invalid_1)
+    with raises(TypeError):
+        dataclass_from_dict(TestDataclassFromDict2, d2_dict_invalid_2)
+    with raises(TypeError):
+        dataclass_from_dict(TestDataclassFromDict2, d2_dict_invalid_3)
+
+
 class TestIsTypeList(unittest.TestCase):
     def test_basic_list(self) -> None:
         a = [1, 2, 3]
@@ -155,11 +197,11 @@ class TestStrictClass(unittest.TestCase):
         assert TestClass([1, 2, 3], [[uint8(200), uint8(25)], [uint8(25)]])  # type: ignore[list-item]
 
         # we want to test invalid here, hence the ignore.
-        with raises(ValueError):
+        with raises(TypeError):
             TestClass({"1": 1}, [[uint8(200), uint8(25)], [uint8(25)]])  # type: ignore[arg-type]
 
         # we want to test invalid here, hence the ignore.
-        with raises(ValueError):
+        with raises(TypeError):
             TestClass([1, 2, 3], [uint8(200), uint8(25)])  # type: ignore[list-item]
 
     def test_StrictDataClassOptional(self) -> None:
