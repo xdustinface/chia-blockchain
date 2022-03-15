@@ -28,6 +28,7 @@ from chia.wallet.cat_wallet.cat_constants import DEFAULT_CATS
 from chia.wallet.cat_wallet.cat_info import CATInfo, LegacyCATInfo
 from chia.wallet.cat_wallet.cat_utils import (
     CAT_MOD,
+    CATDescription,
     SpendableCAT,
     construct_cat_puzzle,
     unsigned_spend_bundle_for_spendable_cats,
@@ -63,10 +64,6 @@ class CATWallet:
     standard_wallet: Wallet
     cost_of_single_tx: Optional[int]
     lineage_store: CATLineageStore
-
-    @staticmethod
-    def default_wallet_name_for_unknown_cat(limitations_program_hash_hex: str) -> str:
-        return f"CAT {limitations_program_hash_hex[:16]}..."
 
     @staticmethod
     async def create_new_cat_wallet(
@@ -120,7 +117,7 @@ class CATWallet:
         # since we didn't yet know the TAIL. Now we know the TAIL, we can update the name
         # according to the template name for unknown/new CATs.
         if original_name is None:
-            name = self.default_wallet_name_for_unknown_cat(self.cat_info.limitations_program_hash.hex())
+            name = CATDescription.default(self.cat_info.limitations_program_hash).name
             await self.set_name(name)
 
         # Change and actual CAT coin
@@ -175,7 +172,8 @@ class CATWallet:
         self.standard_wallet = wallet
         self.log = logging.getLogger(__name__)
 
-        limitations_program_hash_hex = bytes32.from_hexstr(limitations_program_hash_hex).hex()  # Normalize the format
+        limitations_program_hash: bytes32 = bytes32.from_hexstr(limitations_program_hash_hex)
+        limitations_program_hash_hex = limitations_program_hash.hex()  # Normalize the format
 
         for id, wallet in wallet_state_manager.wallets.items():
             if wallet.type() == CATWallet.type():
@@ -184,11 +182,10 @@ class CATWallet:
                     raise ValueError("Wallet already exists")
 
         self.wallet_state_manager = wallet_state_manager
-        if limitations_program_hash_hex in DEFAULT_CATS:
-            cat_info = DEFAULT_CATS[limitations_program_hash_hex]
-            name = cat_info["name"]
+        if limitations_program_hash in DEFAULT_CATS:
+            name = DEFAULT_CATS[limitations_program_hash].name
         elif name is None:
-            name = self.default_wallet_name_for_unknown_cat(limitations_program_hash_hex)
+            name = CATDescription.default(limitations_program_hash).name
 
         limitations_program_hash = bytes32(hexstr_to_bytes(limitations_program_hash_hex))
         self.cat_info = CATInfo(limitations_program_hash, None)

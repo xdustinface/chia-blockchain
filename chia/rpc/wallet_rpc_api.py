@@ -821,7 +821,10 @@ class WalletRpcApi:
     ##########################################################################################
 
     async def get_cat_list(self, request):
-        return {"cat_list": list(DEFAULT_CATS.values())}
+        cat_list: List[Dict[str, str]] = []
+        for asset_id, description in DEFAULT_CATS.items():
+            cat_list.append({"asset_id": asset_id.hex(), **description.to_json_dict()})
+        return {"cat_list": cat_list}
 
     async def cat_set_name(self, request):
         assert self.service.wallet_state_manager is not None
@@ -880,8 +883,9 @@ class WalletRpcApi:
         assert self.service.wallet_state_manager is not None
         wallet = await self.service.wallet_state_manager.get_wallet_for_asset_id(request["asset_id"])
         if wallet is None:
-            if request["asset_id"] in DEFAULT_CATS:
-                return {"wallet_id": None, "name": DEFAULT_CATS[request["asset_id"]]["name"]}
+            asset_id: bytes32 = bytes32.from_hexstr(request["asset_id"])
+            if asset_id in DEFAULT_CATS:
+                return {"wallet_id": None, "name": DEFAULT_CATS[asset_id].name}
             else:
                 raise ValueError("The asset ID specified does not belong to a wallet")
         else:

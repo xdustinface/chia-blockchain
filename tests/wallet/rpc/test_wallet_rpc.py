@@ -22,6 +22,7 @@ from chia.rpc.wallet_rpc_client import WalletRpcClient
 from chia.simulator.simulator_protocol import FarmNewBlockProtocol
 from chia.types.announcement import Announcement
 from chia.types.blockchain_format.program import Program
+from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.peer_info import PeerInfo
 from chia.util.bech32m import decode_puzzle_hash, encode_puzzle_hash
 from chia.consensus.coinbase import create_puzzlehash_for_pk
@@ -29,7 +30,7 @@ from chia.util.hash import std_hash
 from chia.wallet.derive_keys import master_sk_to_wallet_sk
 from chia.util.ints import uint16, uint32, uint64
 from chia.wallet.cat_wallet.cat_constants import DEFAULT_CATS
-from chia.wallet.cat_wallet.cat_wallet import CATWallet
+from chia.wallet.cat_wallet.cat_utils import CATDescription
 from chia.wallet.trading.trade_status import TradeStatus
 from chia.wallet.transaction_record import TransactionRecord
 from chia.wallet.transaction_sorting import SortKey
@@ -404,7 +405,7 @@ class TestWalletRpc:
             res = await client.create_new_cat_and_wallet(20)
             assert res["success"]
             cat_0_id = res["wallet_id"]
-            asset_id = bytes.fromhex(res["asset_id"])
+            asset_id = bytes32.from_hexstr(res["asset_id"])
             assert len(asset_id) > 0
 
             bal_0 = await client.get_wallet_balance(cat_0_id)
@@ -412,9 +413,7 @@ class TestWalletRpc:
             assert bal_0["pending_coin_removal_count"] == 1
             col = await client.get_cat_asset_id(cat_0_id)
             assert col == asset_id
-            assert (await client.get_cat_name(cat_0_id)) == CATWallet.default_wallet_name_for_unknown_cat(
-                asset_id.hex()
-            )
+            assert (await client.get_cat_name(cat_0_id)) == CATDescription.default(asset_id).name
             await client.set_cat_name(cat_0_id, "My cat")
             assert (await client.get_cat_name(cat_0_id)) == "My cat"
             wid, name = await client.cat_asset_id_to_name(col)
@@ -422,10 +421,10 @@ class TestWalletRpc:
             assert name == "My cat"
             should_be_none = await client.cat_asset_id_to_name(bytes([0] * 32))
             assert should_be_none is None
-            verified_asset_id = next(iter(DEFAULT_CATS.items()))[1]["asset_id"]
-            should_be_none, name = await client.cat_asset_id_to_name(bytes.fromhex(verified_asset_id))
+            verified_asset_id, description = next(iter(DEFAULT_CATS.items()))
+            should_be_none, name = await client.cat_asset_id_to_name(verified_asset_id)
             assert should_be_none is None
-            assert name == next(iter(DEFAULT_CATS.items()))[1]["name"]
+            assert name == description.name
 
             await asyncio.sleep(1)
             for i in range(0, 5):

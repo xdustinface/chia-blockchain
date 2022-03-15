@@ -11,7 +11,7 @@ from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.peer_info import PeerInfo
 from chia.util.ints import uint16, uint32, uint64
-from chia.wallet.cat_wallet.cat_utils import construct_cat_puzzle
+from chia.wallet.cat_wallet.cat_utils import CATDescription, construct_cat_puzzle
 from chia.wallet.cat_wallet.cat_wallet import CATWallet
 from chia.wallet.cat_wallet.cat_constants import DEFAULT_CATS
 from chia.wallet.cat_wallet.cat_info import LegacyCATInfo
@@ -265,10 +265,9 @@ class TestCATWallet:
         assert await wallet_node.wallet_state_manager.get_wallet_for_asset_id(asset_id) == cat_wallet
 
         # Test that the a default CAT will initialize correctly
-        asset = DEFAULT_CATS[next(iter(DEFAULT_CATS))]
-        asset_id = asset["asset_id"]
-        cat_wallet_2 = await CATWallet.create_wallet_for_cat(wallet_node.wallet_state_manager, wallet, asset_id)
-        assert await cat_wallet_2.get_name() == asset["name"]
+        asset_id, description = next(iter(DEFAULT_CATS.items()))
+        cat_wallet_2 = await CATWallet.create_wallet_for_cat(wallet_node.wallet_state_manager, wallet, asset_id.hex())
+        assert await cat_wallet_2.get_name() == description.name
         await cat_wallet_2.set_name("Test Name")
         assert await cat_wallet_2.get_name() == "Test Name"
 
@@ -732,11 +731,7 @@ class TestCATWallet:
 
         # Then we update the wallet's default CATs
         wallet_node_2.wallet_state_manager.default_cats = {
-            cat_wallet.cat_info.limitations_program_hash.hex(): {
-                "asset_id": cat_wallet.cat_info.limitations_program_hash.hex(),
-                "name": "Test",
-                "symbol": "TST",
-            }
+            cat_wallet.cat_info.limitations_program_hash.hex(): CATDescription(name="Test", symbol="TST"),
         }
 
         # Then we send another transaction

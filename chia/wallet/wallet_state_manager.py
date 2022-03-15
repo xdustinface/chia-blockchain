@@ -32,7 +32,7 @@ from chia.util.db_wrapper import DBWrapper
 from chia.util.errors import Err
 from chia.util.ints import uint32, uint64, uint128, uint8
 from chia.util.db_synchronous import db_synchronous_on
-from chia.wallet.cat_wallet.cat_utils import match_cat_puzzle, construct_cat_puzzle
+from chia.wallet.cat_wallet.cat_utils import CATDescription, match_cat_puzzle, construct_cat_puzzle
 from chia.wallet.cat_wallet.cat_wallet import CATWallet
 from chia.wallet.cat_wallet.cat_constants import DEFAULT_CATS
 from chia.wallet.derivation_record import DerivationRecord
@@ -111,7 +111,7 @@ class WalletStateManager:
     root_path: Path
     wallet_node: Any
     pool_store: WalletPoolStore
-    default_cats: Dict[str, Any]
+    default_cats: Dict[bytes32, CATDescription]
 
     @staticmethod
     async def create(
@@ -592,14 +592,13 @@ class WalletStateManager:
                 self.log.info(f"Received state for the coin that doesn't belong to us {coin_state}")
             else:
                 our_inner_puzzle: Program = self.main_wallet.puzzle_for_pk(bytes(derivation_record.pubkey))
-                cat_puzzle = construct_cat_puzzle(CAT_MOD, bytes32(bytes(tail_hash)[1:]), our_inner_puzzle)
+                asset_id: bytes32 = bytes32(bytes(tail_hash)[1:])
+                cat_puzzle = construct_cat_puzzle(CAT_MOD, asset_id, our_inner_puzzle)
                 if cat_puzzle.get_tree_hash() != coin_state.coin.puzzle_hash:
                     return None, None
-                if bytes(tail_hash).hex()[2:] in self.default_cats or self.config.get(
-                    "automatically_add_unknown_cats", False
-                ):
+                if asset_id in self.default_cats or self.config.get("automatically_add_unknown_cats", False):
                     cat_wallet = await CATWallet.create_wallet_for_cat(
-                        self, self.main_wallet, bytes(tail_hash).hex()[2:], in_transaction=True
+                        self, self.main_wallet, asset_id.hex(), in_transaction=True
                     )
                     wallet_id = cat_wallet.id()
                     wallet_type = WalletType(cat_wallet.type())

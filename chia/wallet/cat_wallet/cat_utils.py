@@ -9,6 +9,7 @@ from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.condition_opcodes import ConditionOpcode
 from chia.types.spend_bundle import CoinSpend, SpendBundle
 from chia.util.condition_tools import conditions_dict_for_solution
+from chia.util.streamable import streamable, Streamable
 from chia.wallet.lineage_proof import LineageProof
 from chia.wallet.puzzles.cat_loader import CAT_MOD
 
@@ -28,6 +29,17 @@ class SpendableCAT:
     lineage_proof: LineageProof = LineageProof()
     extra_delta: int = 0
     limitations_program_reveal: Program = Program.to([])
+
+
+@dataclasses.dataclass(frozen=True)
+@streamable
+class CATDescription(Streamable):
+    name: str
+    symbol: str
+
+    @classmethod
+    def default(cls, asset_id: bytes32) -> "CATDescription":
+        return CATDescription(f"CAT {asset_id.hex()[:8]}", "UNKNOWN")
 
 
 def match_cat_puzzle(puzzle: Program) -> Tuple[bool, Iterator[Program]]:
