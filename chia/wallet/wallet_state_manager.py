@@ -1,9 +1,11 @@
 import asyncio
+import functools
 import json
 import logging
 import multiprocessing
 import multiprocessing.context
 import time
+from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from pathlib import Path
 from secrets import token_bytes
@@ -73,6 +75,9 @@ class WalletStateManager:
     action_store: WalletActionStore
     basic_store: KeyValStore
 
+    # Used to derive keys / create puzzle hashes
+    thread_pool: ThreadPoolExecutor
+
     start_index: int
 
     # Makes sure only one asyncio thread is changing the blockchain state at one time
@@ -138,6 +143,8 @@ class WalletStateManager:
         await self.db_connection.execute(
             "pragma synchronous={}".format(db_synchronous_on(self.config.get("db_sync", "auto"), db_path))
         )
+
+        self.thread_pool = ThreadPoolExecutor(thread_name_prefix="wsm")
 
         self.db_wrapper = DBWrapper(self.db_connection)
         self.coin_store = await WalletCoinStore.create(self.db_wrapper)
@@ -261,6 +268,8 @@ class WalletStateManager:
 
         for wallet_id in targets:
             target_wallet = self.wallets[wallet_id]
+            if WalletType(target_wallet.type()) == WalletType.POOLING_WALLET:
+                continue
 
             last: Optional[uint32] = await self.puzzle_store.get_last_derivation_path_for_wallet(wallet_id)
 
@@ -280,28 +289,16 @@ class WalletStateManager:
                 start_time = time.time()
                 creating_msg = f"Creating puzzle hashes from {start_index} to {last_index} for wallet_id: {wallet_id}"
                 self.log.info(f"Start: {creating_msg}")
-                for index in range(start_index, last_index):
-                    if WalletType(target_wallet.type()) == WalletType.POOLING_WALLET:
-                        continue
-                    index = uint32(index)
-                    # Hardened
-                    hardened_record: DerivationRecord
-                    try:
-                        hardened_record = self.derive_hardened(target_wallet, index)
-                    except Exception as e:
-                        self.log.error(f"create_more_puzzle_hashes failure: {e}")
-                        break
-                    self.log.debug(f"Derived {hardened_record}")
-                    derivation_paths.append(hardened_record)
-                    # Unhardened
-                    unhardened_record: DerivationRecord
-                    try:
-                        unhardened_record = self.derive_unhardened(target_wallet, index)
-                    except Exception as e:
-                        self.log.error(f"create_more_puzzle_hashes failure: {e}")
-                        break
-                    self.log.debug(f"Derived {unhardened_record}")
-                    derivation_paths.append(unhardened_record)
+                derive_indexes: List[uint32] = [uint32(index) for index in range(start_index, last_index)]
+                derive_hardened = functools.partial(self.derive_hardened, target_wallet)
+                derive_unhardened = functools.partial(self.derive_unhardened, target_wallet)
+
+                try:
+                    derivation_paths.extend(self.thread_pool.map(derive_hardened, derive_indexes))
+                    derivation_paths.extend(self.thread_pool.map(derive_unhardened, derive_indexes))
+                except Exception as e:
+                    self.log.error(f"create_more_puzzle_hashes failure: {e}")
+
                 self.log.info(f"Done: {creating_msg}, took {time.time() - start_time} seconds")
             await self.puzzle_store.add_derivation_paths(derivation_paths, in_transaction)
             await self.add_interested_puzzle_hashes(
