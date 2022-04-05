@@ -277,6 +277,7 @@ class WalletStateManager:
             if start_index >= last_index:
                 self.log.debug(f"Nothing to create for for wallet_id: {wallet_id}, index: {start_index}")
             else:
+                start_time = time.time()
                 creating_msg = f"Creating puzzle hashes from {start_index} to {last_index} for wallet_id: {wallet_id}"
                 self.log.info(f"Start: {creating_msg}")
                 for index in range(start_index, last_index):
@@ -301,7 +302,7 @@ class WalletStateManager:
                         break
                     self.log.debug(f"Derived {unhardened_record}")
                     derivation_paths.append(unhardened_record)
-                self.log.info(f"Done: {creating_msg}")
+                self.log.info(f"Done: {creating_msg}, took {time.time() - start_time} seconds")
             await self.puzzle_store.add_derivation_paths(derivation_paths, in_transaction)
             await self.add_interested_puzzle_hashes(
                 [record.puzzle_hash for record in derivation_paths],
