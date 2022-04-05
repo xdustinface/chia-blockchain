@@ -207,11 +207,28 @@ class WalletStateManager:
 
         return self
 
-    def get_public_key(self, index: uint32) -> G1Element:
-        return master_sk_to_wallet_sk(self.private_key, index).get_g1()
+    def derive_hardened(self, target_wallet: Any, index: uint32) -> DerivationRecord:
+        pubkey: G1Element = master_sk_to_wallet_sk(self.private_key, index).get_g1()
+        puzzle: Program = target_wallet.puzzle_for_pk(bytes(pubkey))
+        if puzzle is None:
+            raise RuntimeError(f"derive_hardened: Unable to create puzzles with wallet {target_wallet}")
+        return DerivationRecord(
+            uint32(index), puzzle.get_tree_hash(), pubkey, target_wallet.type(), uint32(target_wallet.id()), True
+        )
 
-    def get_public_key_unhardened(self, index: uint32) -> G1Element:
-        return master_sk_to_wallet_sk_unhardened(self.private_key, index).get_g1()
+    def derive_unhardened(self, target_wallet: Any, index: uint32) -> DerivationRecord:
+        pubkey_unhardened: G1Element = master_sk_to_wallet_sk_unhardened(self.private_key, index).get_g1()
+        puzzle_unhardened: Program = target_wallet.puzzle_for_pk(bytes(pubkey_unhardened))
+        if puzzle_unhardened is None:
+            raise RuntimeError(f"derive_unhardened: Unable to create puzzles with wallet {target_wallet}")
+        return DerivationRecord(
+            uint32(index),
+            puzzle_unhardened.get_tree_hash(),
+            pubkey_unhardened,
+            target_wallet.type(),
+            uint32(target_wallet.id()),
+            False,
+        )
 
     async def get_keys(self, puzzle_hash: bytes32) -> Optional[Tuple[G1Element, PrivateKey]]:
         record = await self.puzzle_store.record_for_puzzle_hash(puzzle_hash)
@@ -265,40 +282,25 @@ class WalletStateManager:
                 for index in range(start_index, last_index):
                     if WalletType(target_wallet.type()) == WalletType.POOLING_WALLET:
                         continue
-
+                    index = uint32(index)
                     # Hardened
-                    pubkey: G1Element = self.get_public_key(uint32(index))
-                    puzzle: Program = target_wallet.puzzle_for_pk(bytes(pubkey))
-                    if puzzle is None:
-                        self.log.error(f"Unable to create puzzles with wallet {target_wallet}")
+                    hardened_record: DerivationRecord
+                    try:
+                        hardened_record = self.derive_hardened(target_wallet, index)
+                    except Exception as e:
+                        self.log.error(f"create_more_puzzle_hashes failure: {e}")
                         break
-                    puzzlehash: bytes32 = puzzle.get_tree_hash()
-                    self.log.debug(f"Puzzle at index {index} wallet ID {wallet_id} puzzle hash {puzzlehash.hex()}")
-                    derivation_paths.append(
-                        DerivationRecord(
-                            uint32(index), puzzlehash, pubkey, target_wallet.type(), uint32(target_wallet.id()), True
-                        )
-                    )
+                    self.log.debug(f"Derived {hardened_record}")
+                    derivation_paths.append(hardened_record)
                     # Unhardened
-                    pubkey_unhardened: G1Element = self.get_public_key_unhardened(uint32(index))
-                    puzzle_unhardened: Program = target_wallet.puzzle_for_pk(bytes(pubkey_unhardened))
-                    if puzzle_unhardened is None:
-                        self.log.error(f"Unable to create puzzles with wallet {target_wallet}")
+                    unhardened_record: DerivationRecord
+                    try:
+                        unhardened_record = self.derive_unhardened(target_wallet, index)
+                    except Exception as e:
+                        self.log.error(f"create_more_puzzle_hashes failure: {e}")
                         break
-                    puzzlehash_unhardened: bytes32 = puzzle_unhardened.get_tree_hash()
-                    self.log.debug(
-                        f"Puzzle at index {index} wallet ID {wallet_id} puzzle hash {puzzlehash_unhardened.hex()}"
-                    )
-                    derivation_paths.append(
-                        DerivationRecord(
-                            uint32(index),
-                            puzzlehash_unhardened,
-                            pubkey_unhardened,
-                            target_wallet.type(),
-                            uint32(target_wallet.id()),
-                            False,
-                        )
-                    )
+                    self.log.debug(f"Derived {unhardened_record}")
+                    derivation_paths.append(unhardened_record)
                 self.log.info(f"Done: {creating_msg}")
             await self.puzzle_store.add_derivation_paths(derivation_paths, in_transaction)
             await self.add_interested_puzzle_hashes(
@@ -322,20 +324,8 @@ class WalletStateManager:
                 unused = uint32(0)
         for index in range(unused, last):
             # Since DID are not released yet we can assume they are only using unhardened keys derivation
-            pubkey: G1Element = self.get_public_key_unhardened(uint32(index))
-            puzzle: Program = target_wallet.puzzle_for_pk(bytes(pubkey))
-            puzzlehash: bytes32 = puzzle.get_tree_hash()
-            self.log.info(f"Generating public key at index {index} puzzle hash {puzzlehash.hex()}")
-            derivation_paths.append(
-                DerivationRecord(
-                    uint32(index),
-                    puzzlehash,
-                    pubkey,
-                    target_wallet.wallet_info.type,
-                    uint32(target_wallet.wallet_info.id),
-                    False,
-                )
-            )
+            derivation_record: DerivationRecord = self.derive_unhardened(target_wallet, uint32(index))
+            self.log.info(f"update_wallet_puzzle_hashes derived {derivation_record}")
         await self.puzzle_store.add_derivation_paths(derivation_paths)
 
     async def get_unused_derivation_record(
