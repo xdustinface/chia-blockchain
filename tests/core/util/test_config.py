@@ -1,11 +1,16 @@
 import asyncio
 import copy
+import random
 import shutil
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool, Queue, TimeoutError
+from pathlib import Path
+from threading import Thread
+from time import sleep
+from typing import Dict, Optional
 
 import pytest
-import random
 import yaml
 
 from chia.util.config import (
@@ -18,12 +23,6 @@ from chia.util.config import (
     save_config,
 )
 from chia.util.path import mkdir
-from multiprocessing import Pool, Queue, TimeoutError
-from pathlib import Path
-from threading import Thread
-from time import sleep
-from typing import Dict, Optional
-
 
 # Commented-out lines are preserved to aid in debugging the multiprocessing tests
 # import logging

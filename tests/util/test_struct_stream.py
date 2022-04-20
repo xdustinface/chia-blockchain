@@ -1,8 +1,9 @@
-from decimal import Decimal
-import pytest
 import io
+from decimal import Decimal
 
-from chia.util.ints import int8, uint8, int16, uint16, int32, uint32, int64, uint64, uint128, int512
+import pytest
+
+from chia.util.ints import int8, int16, int32, int64, int512, uint8, uint16, uint32, uint64, uint128
 
 
 class TestStructStream:

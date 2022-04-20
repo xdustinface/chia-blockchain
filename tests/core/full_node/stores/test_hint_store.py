@@ -1,4 +1,5 @@
 import logging
+
 import pytest
 from clvm.casts import int_to_bytes
 
@@ -11,7 +12,6 @@ from chia.types.spend_bundle import SpendBundle
 from tests.blockchain.blockchain_test_utils import _validate_and_add_block, _validate_and_add_block_no_error
 from tests.util.db_connection import DBConnection
 from tests.wallet_tools import WalletTool
-
 
 log = logging.getLogger(__name__)
 

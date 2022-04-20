@@ -1,7 +1,7 @@
 import pytest
 from blspy import AugSchemeMPL
 
-from chia.consensus.block_rewards import calculate_pool_reward, calculate_base_farmer_reward
+from chia.consensus.block_rewards import calculate_base_farmer_reward, calculate_pool_reward
 from chia.simulator.simulator_protocol import FarmNewBlockProtocol
 from chia.types.blockchain_format.program import Program
 from chia.types.peer_info import PeerInfo

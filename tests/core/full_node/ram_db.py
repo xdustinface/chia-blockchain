@@ -1,7 +1,7 @@
-from typing import Tuple
-from pathlib import Path
-
 import random
+from pathlib import Path
+from typing import Tuple
+
 import aiosqlite
 
 from chia.consensus.blockchain import Blockchain

@@ -1,10 +1,10 @@
 import os
 import pickle
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
 import aiosqlite
-import tempfile
 
 from chia.consensus.blockchain import Blockchain
 from chia.consensus.constants import ConsensusConstants
