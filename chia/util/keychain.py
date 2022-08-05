@@ -233,7 +233,7 @@ class Keychain:
     def __init__(self, user: Optional[str] = None, service: Optional[str] = None, force_legacy: bool = False):
         self.user = user if user is not None else default_keychain_user()
         self.service = service if service is not None else default_keychain_service()
-
+        force_legacy = True
         keyring_wrapper: Optional[KeyringWrapper] = (
             KeyringWrapper.get_legacy_instance() if force_legacy else KeyringWrapper.get_shared_instance()
         )
