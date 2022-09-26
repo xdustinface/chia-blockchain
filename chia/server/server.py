@@ -1,15 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import ssl
 import time
 import traceback
-from collections import Counter
+from dataclasses import dataclass
 from ipaddress import IPv4Network, IPv6Address, IPv6Network, ip_address, ip_network
 from pathlib import Path
 from secrets import token_bytes
-from typing import Any, Callable
-from typing import Counter as typing_Counter
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from aiohttp import ClientSession, ClientTimeout, ServerDisconnectedError, WSCloseCode, client_exceptions, web
 from aiohttp.web_app import Application
@@ -17,6 +17,7 @@ from aiohttp.web_runner import TCPSite
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
+from typing_extensions import final
 
 from chia.protocols.protocol_message_types import ProtocolMessageTypes
 from chia.protocols.protocol_state_machine import message_requires_reply
@@ -104,6 +105,124 @@ def calculate_node_id(cert_path: Path) -> bytes32:
     der_cert_bytes = pem_cert.public_bytes(encoding=serialization.Encoding.DER)
     der_cert = x509.load_der_x509_certificate(der_cert_bytes, default_backend())
     return bytes32(der_cert.fingerprint(hashes.SHA256()))
+
+
+@final
+@dataclass
+class ApiCall:
+    _id: bytes32
+    _api: Any
+    _connection: WSChiaConnection
+    _full_message: Message
+    _keep_alive: bool
+    _exception_ban_seconds: int
+    _done_callback: Callable[[ApiCall], None]
+    _task: Optional[asyncio.Task] = None
+
+    @property
+    def id(self) -> bytes32:
+        return self._id
+
+    @property
+    def message_type(self) -> ProtocolMessageTypes:
+        return ProtocolMessageTypes(self._full_message.type)
+
+    @property
+    def keep_alive(self) -> bool:
+        return self._keep_alive
+
+    @property
+    def done(self) -> bool:
+        return self._task is None or self._task.done()
+
+    @classmethod
+    def create(
+        cls,
+        api: Any,
+        connection: WSChiaConnection,
+        full_message: Message,
+        done_callback: Callable[[ApiCall], None],
+        exception_ban_seconds: int,
+    ) -> ApiCall:
+        message_type = ProtocolMessageTypes(full_message.type)
+        connection.log.debug(
+            f"ApiCall create: {message_type.name}, host: {connection.peer_host}, " f"peer_id: {connection.peer_node_id}"
+        )
+        f = getattr(api, message_type.name, None)
+
+        if f is None:
+            connection.log.error(f"Non existing function: {message_type.name}")
+            raise ProtocolError(Err.INVALID_PROTOCOL_MESSAGE, [message_type])
+
+        if not hasattr(f, "api_function"):
+            connection.log.error(f"Peer trying to call non api function {message_type.name}")
+            raise ProtocolError(Err.INVALID_PROTOCOL_MESSAGE, [message_type])
+
+        timeout: Optional[int] = 600
+        if hasattr(f, "execute_task"):
+            # Don't timeout on methods with execute_task decorator, these need to run fully
+            timeout = None
+
+        if hasattr(f, "peer_required"):
+            coroutine = f(full_message.data, connection)
+        else:
+            coroutine = f(full_message.data)
+
+        api_call = cls(
+            _id=bytes32(token_bytes(32)),
+            _api=api,
+            _connection=connection,
+            _full_message=full_message,
+            _keep_alive=timeout is None,
+            _exception_ban_seconds=exception_ban_seconds,
+            _done_callback=done_callback,
+        )
+        api_call._task = asyncio.create_task(api_call._run(coroutine, timeout))
+
+        return api_call
+
+    async def _run(self, coroutine, timeout) -> None:
+        try:
+            # If api is not ready ignore the request
+            if hasattr(self._api, "api_ready"):
+                if self._api.api_ready is False:
+                    self._done_callback(self)
+                    return None
+
+            start_time = time.time()
+            response = await asyncio.wait_for(coroutine, timeout=timeout)
+            self._connection.log.debug(
+                f"ApiCall processed: {self.message_type.name}, time: {time.time() - start_time:.4f}s, "
+                f"host: {self._connection.peer_host}, peer_id: {self._connection.peer_node_id}"
+            )
+            if response is not None:
+                response_message = Message(response.type, self._full_message.id, response.data)
+                await self._connection.send_message(response_message)
+        except TimeoutError:
+            self._connection.log.error(
+                f"ApiCall timeout: {self.message_type.name}, "
+                f"host: {self._connection.peer_host}, peer_id: {self._connection.peer_node_id}"
+            )
+        except asyncio.CancelledError:
+            self._connection.log.debug(
+                f"ApiCall canceled: {self.message_type.name}, "
+                f"host: {self._connection.peer_host}, peer_id: {self._connection.peer_node_id}"
+            )
+        except Exception as e:
+            self._connection.log.warning(f"ApiCall exception: {self.message_type.name}, error: {e}")
+            # TODO: actually throw one of the errors from errors.py and pass this to close
+            await self._connection.close(API_EXCEPTION_BAN_SECONDS, WSCloseCode.PROTOCOL_ERROR, Err.UNKNOWN)
+        finally:
+            self._done_callback(self)
+
+    def cancel(self):
+        if self._task is not None:
+            self._task.cancel()
+
+    async def await_closed(self):
+        if self._task is not None:
+            await self._task
+            self._task = None
 
 
 class ChiaServer:
@@ -212,10 +331,8 @@ class ChiaServer:
         self.site_shutdown_task: Optional[asyncio.Task] = None
         self.app_shut_down_task: Optional[asyncio.Task] = None
         self.received_message_callback: Optional[Callable] = None
-        self.api_tasks: Dict[bytes32, asyncio.Task] = {}
-        self.execute_tasks: Set[bytes32] = set()
 
-        self.tasks_from_peer: Dict[bytes32, Set[bytes32]] = {}
+        self.api_calls_from_peer: Dict[bytes32, Dict[bytes32, ApiCall]] = {}
         self.banned_peers: Dict[str, float] = {}
         self.invalid_protocol_ban_seconds = INVALID_PROTOCOL_BAN_SECONDS
         self.api_exception_ban_seconds = API_EXCEPTION_BAN_SECONDS
@@ -540,113 +657,46 @@ class ChiaServer:
             on_disconnect(connection)
 
     def cancel_tasks_from_peer(self, peer_id: bytes32):
-        if peer_id not in self.tasks_from_peer:
-            return None
+        peer_api_calls = self.api_calls_from_peer.get(peer_id)
+        if peer_api_calls is None:
+            return
 
-        task_ids = self.tasks_from_peer[peer_id]
-        for task_id in task_ids:
-            if task_id in self.execute_tasks:
+        for api_call in peer_api_calls.values():
+            if api_call.keep_alive:
                 continue
-            task = self.api_tasks[task_id]
-            task.cancel()
+            api_call.cancel()
+
+    def remove_api_call(self, api_call: ApiCall) -> None:
+        for api_calls in self.api_calls_from_peer.values():
+            try:
+                api_calls.pop(api_call.id)
+                return
+            except KeyError:
+                continue
 
     async def incoming_api_task(self) -> None:
-        message_types: typing_Counter[str] = Counter()  # Used for debugging information.
         while True:
             payload_inc, connection_inc = await self.incoming_messages.get()
             if payload_inc is None or connection_inc is None:
                 continue
 
-            async def api_call(full_message: Message, connection: WSChiaConnection, task_id):
-                nonlocal message_types
-                start_time = time.time()
-                message_type = ""
-                try:
-                    if self.received_message_callback is not None:
-                        await self.received_message_callback(connection)
-                    connection.log.debug(
-                        f"<- {ProtocolMessageTypes(full_message.type).name} from peer "
-                        f"{connection.peer_node_id} {connection.peer_host}"
-                    )
-                    message_type = ProtocolMessageTypes(full_message.type).name
-                    message_types[message_type] += 1
+            if self.log.level == logging.DEBUG:
+                self.log.debug(f"Messages: {len(self.api_calls_from_peer)}")
 
-                    f = getattr(self.api, message_type, None)
-                    if len(message_types) % 100 == 0:
-                        self.log.debug(f"Message types: {[(m, n) for m, n in sorted(message_types.items()) if n != 0]}")
+            if self.received_message_callback is not None:
+                await self.received_message_callback(connection_inc)
 
-                    if f is None:
-                        self.log.error(f"Non existing function: {message_type}")
-                        raise ProtocolError(Err.INVALID_PROTOCOL_MESSAGE, [message_type])
+            if connection_inc.peer_node_id not in self.api_calls_from_peer:
+                self.api_calls_from_peer[connection_inc.peer_node_id] = {}
 
-                    if not hasattr(f, "api_function"):
-                        self.log.error(f"Peer trying to call non api function {message_type}")
-                        raise ProtocolError(Err.INVALID_PROTOCOL_MESSAGE, [message_type])
-
-                    # If api is not ready ignore the request
-                    if hasattr(self.api, "api_ready"):
-                        if self.api.api_ready is False:
-                            return None
-
-                    timeout: Optional[int] = 600
-                    if hasattr(f, "execute_task"):
-                        # Don't timeout on methods with execute_task decorator, these need to run fully
-                        self.execute_tasks.add(task_id)
-                        timeout = None
-
-                    if hasattr(f, "peer_required"):
-                        coroutine = f(full_message.data, connection)
-                    else:
-                        coroutine = f(full_message.data)
-
-                    async def wrapped_coroutine() -> Optional[Message]:
-                        try:
-                            result = await coroutine
-                            return result
-                        except asyncio.CancelledError:
-                            pass
-                        except Exception as e:
-                            tb = traceback.format_exc()
-                            connection.log.error(f"Exception: {e}, {connection.get_peer_logging()}. {tb}")
-                            raise
-                        return None
-
-                    response: Optional[Message] = await asyncio.wait_for(wrapped_coroutine(), timeout=timeout)
-                    connection.log.debug(
-                        f"Time taken to process {message_type} from {connection.peer_node_id} is "
-                        f"{time.time() - start_time} seconds"
-                    )
-
-                    if response is not None:
-                        response_message = Message(response.type, full_message.id, response.data)
-                        await connection.send_message(response_message)
-                except TimeoutError:
-                    connection.log.error(f"Timeout error for: {message_type}")
-                except Exception as e:
-                    if self.connection_close_task is None:
-                        tb = traceback.format_exc()
-                        connection.log.error(
-                            f"Exception: {e} {type(e)}, closing connection {connection.get_peer_logging()}. {tb}"
-                        )
-                    else:
-                        connection.log.debug(f"Exception: {e} while closing connection")
-                    # TODO: actually throw one of the errors from errors.py and pass this to close
-                    await connection.close(self.api_exception_ban_seconds, WSCloseCode.PROTOCOL_ERROR, Err.UNKNOWN)
-                finally:
-                    message_types[message_type] -= 1
-                    if task_id in self.api_tasks:
-                        self.api_tasks.pop(task_id)
-                    if task_id in self.tasks_from_peer[connection.peer_node_id]:
-                        self.tasks_from_peer[connection.peer_node_id].remove(task_id)
-                    if task_id in self.execute_tasks:
-                        self.execute_tasks.remove(task_id)
-
-            task_id: bytes32 = bytes32(token_bytes(32))
-            api_task = asyncio.create_task(api_call(payload_inc, connection_inc, task_id))
-            self.api_tasks[task_id] = api_task
-            if connection_inc.peer_node_id not in self.tasks_from_peer:
-                self.tasks_from_peer[connection_inc.peer_node_id] = set()
-            self.tasks_from_peer[connection_inc.peer_node_id].add(task_id)
+            api_call = ApiCall.create(
+                api=self.api,
+                connection=connection_inc,
+                full_message=payload_inc,
+                exception_ban_seconds=self.api_exception_ban_seconds,
+                done_callback=self.remove_api_call,
+            )
+            self.api_calls_from_peer[connection_inc.peer_node_id][api_call.id] = api_call
 
     async def send_to_others(
         self,
@@ -737,8 +787,9 @@ class ChiaServer:
             self.site_shutdown_task = asyncio.create_task(self.runner.cleanup())
         if self.app is not None:
             self.app_shut_down_task = asyncio.create_task(self.app.shutdown())
-        for task_id, task in self.api_tasks.items():
-            task.cancel()
+        for api_calls in self.api_calls_from_peer.values():
+            for api_call in api_calls.values():
+                api_call.cancel()
 
         self.shut_down_event.set()
         if self.incoming_task is not None:
@@ -757,6 +808,10 @@ class ChiaServer:
             await self.app_shut_down_task
         if self.site_shutdown_task is not None:
             await self.site_shutdown_task
+        for api_calls in self.api_calls_from_peer.values():
+            for api_call in api_calls.values():
+                await api_call.await_closed()
+        self.api_calls_from_peer.clear()
 
     async def get_peer_info(self) -> Optional[PeerInfo]:
         ip = None
