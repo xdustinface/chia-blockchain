@@ -169,9 +169,9 @@ class TestMempool:
         assert spend_bundle is not None
 
 
-@peer_required
-@api_request
+@peer_required  # type: ignore[arg-type]
 @bytes_required
+@api_request
 async def respond_transaction(
     node: FullNodeAPI,
     tx: full_node_protocol.RespondTransaction,

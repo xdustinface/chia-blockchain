@@ -51,8 +51,8 @@ class CrawlerAPI:
     async def new_transaction(self, transaction: full_node_protocol.NewTransaction) -> Optional[Message]:
         pass
 
-    @api_request
     @peer_required
+    @api_request
     async def new_signage_point_or_end_of_sub_slot(
         self, new_sp: full_node_protocol.NewSignagePointOrEndOfSubSlot, peer: ws.WSChiaConnection
     ) -> Optional[Message]:

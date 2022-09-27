@@ -77,8 +77,8 @@ class FullNodeAPI:
         return self.full_node.initialized
 
     @peer_required
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_peers])
+    @api_request
     async def request_peers(
         self, _request: full_node_protocol.RequestPeers, peer: ws.WSChiaConnection
     ) -> Optional[Message]:
@@ -218,8 +218,8 @@ class FullNodeAPI:
             return None
         return None
 
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_transaction])
+    @api_request
     async def request_transaction(self, request: full_node_protocol.RequestTransaction) -> Optional[Message]:
         """Peer has requested a full transaction from us."""
         # Ignore if syncing
@@ -235,8 +235,8 @@ class FullNodeAPI:
         return msg
 
     @peer_required
-    @api_request
     @bytes_required
+    @api_request
     async def respond_transaction(
         self,
         tx: full_node_protocol.RespondTransaction,
@@ -266,8 +266,8 @@ class FullNodeAPI:
         )
         return None
 
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_proof_of_weight])
+    @api_request
     async def request_proof_of_weight(self, request: full_node_protocol.RequestProofOfWeight) -> Optional[Message]:
         if self.full_node.weight_proof_handler is None:
             return None
@@ -312,8 +312,8 @@ class FullNodeAPI:
         self.log.warning("Received proof of weight too late.")
         return None
 
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_block, ProtocolMessageTypes.reject_block])
+    @api_request
     async def request_block(self, request: full_node_protocol.RequestBlock) -> Optional[Message]:
         if not self.full_node.blockchain.contains_height(request.height):
             reject = RejectBlock(request.height)
@@ -330,8 +330,8 @@ class FullNodeAPI:
             return make_msg(ProtocolMessageTypes.respond_block, full_node_protocol.RespondBlock(block))
         return make_msg(ProtocolMessageTypes.reject_block, RejectBlock(request.height))
 
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_blocks, ProtocolMessageTypes.reject_blocks])
+    @api_request
     async def request_blocks(self, request: full_node_protocol.RequestBlocks) -> Optional[Message]:
         if request.end_height < request.start_height or request.end_height - request.start_height > 32:
             reject = RejectBlocks(request.start_height, request.end_height)
@@ -400,8 +400,8 @@ class FullNodeAPI:
         self.log.warning("Received unsolicited/late blocks")
         return None
 
-    @api_request
     @peer_required
+    @api_request
     async def respond_block(
         self,
         respond_block: full_node_protocol.RespondBlock,
@@ -446,8 +446,8 @@ class FullNodeAPI:
 
         return msg
 
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_unfinished_block])
+    @api_request
     async def request_unfinished_block(
         self, request_unfinished_block: full_node_protocol.RequestUnfinishedBlock
     ) -> Optional[Message]:
@@ -463,8 +463,8 @@ class FullNodeAPI:
         return None
 
     @peer_required
-    @api_request
     @bytes_required
+    @api_request
     async def respond_unfinished_block(
         self,
         respond_unfinished_block: full_node_protocol.RespondUnfinishedBlock,
@@ -478,8 +478,8 @@ class FullNodeAPI:
         )
         return None
 
-    @api_request
     @peer_required
+    @api_request
     async def new_signage_point_or_end_of_sub_slot(
         self, new_sp: full_node_protocol.NewSignagePointOrEndOfSubSlot, peer: ws.WSChiaConnection
     ) -> Optional[Message]:
@@ -561,8 +561,8 @@ class FullNodeAPI:
 
         return make_msg(ProtocolMessageTypes.request_signage_point_or_end_of_sub_slot, full_node_request)
 
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_signage_point, ProtocolMessageTypes.respond_end_of_sub_slot])
+    @api_request
     async def request_signage_point_or_end_of_sub_slot(
         self, request: full_node_protocol.RequestSignagePointOrEndOfSubSlot
     ) -> Optional[Message]:
@@ -689,8 +689,8 @@ class FullNodeAPI:
         return None
 
     # FARMER PROTOCOL
-    @api_request
     @peer_required
+    @api_request
     async def declare_proof_of_space(
         self, request: farmer_protocol.DeclareProofOfSpace, peer: ws.WSChiaConnection
     ) -> Optional[Message]:
@@ -979,8 +979,8 @@ class FullNodeAPI:
                 )
         return None
 
-    @api_request
     @peer_required
+    @api_request
     async def signed_values(
         self, farmer_request: farmer_protocol.SignedValues, peer: ws.WSChiaConnection
     ) -> Optional[Message]:
@@ -1428,8 +1428,8 @@ class FullNodeAPI:
 
     @execute_task
     @peer_required
-    @api_request
     @bytes_required
+    @api_request
     async def new_compact_vdf(
         self, request: full_node_protocol.NewCompactVDF, peer: ws.WSChiaConnection, request_bytes: bytes = b""
     ) -> None:
@@ -1456,8 +1456,8 @@ class FullNodeAPI:
         return None
 
     @peer_required
-    @api_request
     @reply_type([ProtocolMessageTypes.respond_compact_vdf])
+    @api_request
     async def request_compact_vdf(
         self, request: full_node_protocol.RequestCompactVDF, peer: ws.WSChiaConnection
     ) -> None:

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, List, Optional, Unio
 
 from chia.protocols.protocol_message_types import ProtocolMessageTypes
 from chia.server.outbound_message import Message
+from chia.util.errors import ApiDecorationError
 from chia.util.streamable import Streamable, _T_Streamable
 
 log = logging.getLogger(__name__)
@@ -30,7 +31,6 @@ metadata_attribute_name = "_chia_api_metadata"
 
 @dataclass
 class ApiMetadata:
-    api_function: bool = False
     peer_required: bool = False
     bytes_required: bool = False
     execute_task: bool = False
@@ -38,24 +38,8 @@ class ApiMetadata:
     message_class: Optional[Any] = None
 
 
-def get_metadata(function: Callable[..., Any]) -> ApiMetadata:
-    maybe_metadata: Optional[ApiMetadata] = getattr(function, metadata_attribute_name, None)
-    if maybe_metadata is None:
-        return ApiMetadata()
-
-    return maybe_metadata
-
-
-def set_default_and_get_metadata(function: Callable[..., Any]) -> ApiMetadata:
-    maybe_metadata: Optional[ApiMetadata] = getattr(function, metadata_attribute_name, None)
-
-    if maybe_metadata is None:
-        metadata = ApiMetadata()
-        setattr(function, metadata_attribute_name, metadata)
-    else:
-        metadata = maybe_metadata
-
-    return metadata
+def get_metadata(function: Callable[..., Any]) -> Optional[ApiMetadata]:
+    return getattr(function, metadata_attribute_name, None)
 
 
 def api_request(f: initial_api_f_type) -> converted_api_f_type:  # type: ignore
@@ -64,6 +48,8 @@ def api_request(f: initial_api_f_type) -> converted_api_f_type:  # type: ignore
         binding = sig.bind(*args, **kwargs)
         binding.apply_defaults()
         inter = dict(binding.arguments)
+
+        assert metadata is not None
 
         # Converts each parameter from a Python dictionary, into an instance of the object
         # specified by the type annotation (signature) of the function that is being called (f)
@@ -85,9 +71,10 @@ def api_request(f: initial_api_f_type) -> converted_api_f_type:  # type: ignore
     }
     sig = signature(f)
 
-    metadata = set_default_and_get_metadata(function=f)
-    setattr(f_substitute, metadata_attribute_name, metadata)
-    metadata.api_function = True
+    metadata = get_metadata(function=f_substitute)
+    if metadata is None:
+        metadata = ApiMetadata()
+        setattr(f_substitute, metadata_attribute_name, metadata)
 
     # It would be good to better identify the single parameter of interest.
     metadata.message_class = [
@@ -99,7 +86,9 @@ def api_request(f: initial_api_f_type) -> converted_api_f_type:  # type: ignore
 
 def peer_required(func: Callable[..., Any]) -> Callable[..., Any]:
     def inner() -> Callable[..., Any]:
-        metadata = set_default_and_get_metadata(function=func)
+        metadata = get_metadata(function=func)
+        if metadata is None:
+            raise ApiDecorationError("@peer_required must be applied after @api_request")
         metadata.peer_required = True
         return func
 
@@ -108,7 +97,9 @@ def peer_required(func: Callable[..., Any]) -> Callable[..., Any]:
 
 def bytes_required(func: Callable[..., Any]) -> Callable[..., Any]:
     def inner() -> Callable[..., Any]:
-        metadata = set_default_and_get_metadata(function=func)
+        metadata = get_metadata(function=func)
+        if metadata is None:
+            raise ApiDecorationError("@bytes_required must be applied after @api_request")
         metadata.bytes_required = True
         return func
 
@@ -117,7 +108,9 @@ def bytes_required(func: Callable[..., Any]) -> Callable[..., Any]:
 
 def execute_task(func: Callable[..., Any]) -> Callable[..., Any]:
     def inner() -> Callable[..., Any]:
-        metadata = set_default_and_get_metadata(function=func)
+        metadata = get_metadata(function=func)
+        if metadata is None:
+            raise ApiDecorationError("@execute_task must be applied after @api_request")
         metadata.execute_task = True
         return func
 
@@ -127,7 +120,9 @@ def execute_task(func: Callable[..., Any]) -> Callable[..., Any]:
 def reply_type(prot_type: List[ProtocolMessageTypes]) -> Callable[..., Any]:
     def wrap(func: Callable[..., Any]) -> Callable[..., Any]:
         def inner() -> Callable[..., Any]:
-            metadata = set_default_and_get_metadata(function=func)
+            metadata = get_metadata(function=func)
+            if metadata is None:
+                raise ApiDecorationError("@reply_type must be applied after @api_request")
             metadata.reply_type.extend(prot_type)
             return func
 

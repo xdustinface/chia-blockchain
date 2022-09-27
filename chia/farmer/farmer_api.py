@@ -49,8 +49,8 @@ class FarmerAPI:
     def __init__(self, farmer) -> None:
         self.farmer = farmer
 
-    @api_request
     @peer_required
+    @api_request
     async def new_proof_of_space(
         self, new_proof_of_space: harvester_protocol.NewProofOfSpace, peer: ws.WSChiaConnection
     ):
@@ -527,42 +527,42 @@ class FarmerAPI:
             },
         )
 
-    @api_request
     @peer_required
+    @api_request
     async def respond_plots(self, _: harvester_protocol.RespondPlots, peer: ws.WSChiaConnection):
         self.farmer.log.warning(f"Respond plots came too late from: {peer.get_peer_logging()}")
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_start(self, message: PlotSyncStart, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].sync_started(message)
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_loaded(self, message: PlotSyncPlotList, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].process_loaded(message)
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_removed(self, message: PlotSyncPathList, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].process_removed(message)
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_invalid(self, message: PlotSyncPathList, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].process_invalid(message)
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_keys_missing(self, message: PlotSyncPathList, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].process_keys_missing(message)
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_duplicates(self, message: PlotSyncPathList, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].process_duplicates(message)
 
-    @api_request
     @peer_required
+    @api_request
     async def plot_sync_done(self, message: PlotSyncDone, peer: ws.WSChiaConnection):
         await self.farmer.plot_sync_receivers[peer.peer_node_id].sync_done(message)

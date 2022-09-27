@@ -289,6 +289,10 @@ class KeychainLabelExists(KeychainLabelError):
 ##
 
 
+class ApiDecorationError(Exception):
+    pass
+
+
 class InvalidPathError(Exception):
     def __init__(self, path: Path, error_message: str):
         super().__init__(f"{error_message}: {str(path)!r}")
