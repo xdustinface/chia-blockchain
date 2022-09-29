@@ -782,7 +782,7 @@ class WalletNode:
                 self.log.error("No server")
                 await asyncio.gather(*all_tasks)
                 return False
-            if peer.peer_node_id not in self.server.all_connections:
+            if self.server.connection_for_peer_id(peer.peer_node_id) is None:
                 self.log.error(f"Disconnected from peer {peer.peer_node_id} host {peer.peer_host}")
                 await asyncio.gather(*all_tasks)
                 return False
@@ -813,10 +813,9 @@ class WalletNode:
                 all_tasks.append(asyncio.create_task(receive_and_validate(states, idx, concurrent_tasks_cs_heights)))
             idx += len(states)
 
-        still_connected = self._server is not None and peer.peer_node_id in self.server.all_connections
         await asyncio.gather(*all_tasks)
         await self.update_ui()
-        return still_connected and self._server is not None and peer.peer_node_id in self.server.all_connections
+        return self._server is not None and self.server.connection_for_peer_id(peer.peer_node_id) is not None
 
     async def get_coins_with_puzzle_hash(self, puzzle_hash) -> List[CoinState]:
         # TODO Use trusted peer, otherwise try untrusted

@@ -912,8 +912,7 @@ class FullNode:
             self.peer_sub_counter.pop(peer.peer_node_id)
 
     def _num_needed_peers(self) -> int:
-        assert self.server.all_connections is not None
-        diff: int = int(self.config["target_peer_count"]) - len(self.server.all_connections)
+        diff: int = int(self.config["target_peer_count"]) - len(self.server.get_connections())
         return diff if diff >= 0 else 0
 
     def _close(self) -> None:
@@ -1003,7 +1002,7 @@ class FullNode:
 
             peers: List[bytes32] = []
             coroutines = []
-            for peer in self.server.all_connections.values():
+            for peer in self.server.get_connections():
                 if peer.connection_type == NodeType.FULL_NODE:
                     peers.append(peer.peer_node_id)
                     coroutines.append(
@@ -1020,7 +1019,7 @@ class FullNode:
 
             peer_ids: Set[bytes32] = self.sync_store.get_peers_that_have_peak([heaviest_peak_hash])
             peers_with_peak: List[ws.WSChiaConnection] = [
-                c for c in self.server.all_connections.values() if c.peer_node_id in peer_ids
+                c for c in self.server.get_connections() if c.peer_node_id in peer_ids
             ]
 
             # Request weight proof from a random peer
@@ -1198,7 +1197,7 @@ class FullNode:
         if len(peer_ids) == 0:
             self.log.warning(f"Not syncing, no peers with header_hash {peak_hash} ")
             return []
-        return [c for c in self.server.all_connections.values() if c.peer_node_id in peer_ids]
+        return [c for c in self.server.get_connections() if c.peer_node_id in peer_ids]
 
     async def update_wallets(
         self,
@@ -1234,9 +1233,9 @@ class FullNode:
                     changes_for_peer[peer].add(coin_record.coin_state)
 
         for peer, changes in changes_for_peer.items():
-            if peer not in self.server.all_connections:
+            ws_peer = self.server.connection_for_peer_id(peer)
+            if ws_peer is None:
                 continue
-            ws_peer: ws.WSChiaConnection = self.server.all_connections[peer]
             state = CoinStateUpdate(
                 state_change_summary.peak.height,
                 state_change_summary.fork_height,

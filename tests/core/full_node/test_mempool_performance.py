@@ -63,8 +63,7 @@ class TestMempoolPerformance:
         await full_node_api_1.respond_transaction(
             full_node_protocol.RespondTransaction(big_transaction.spend_bundle), peer, test=True
         )
-        cons = list(server_1.all_connections.values())[:]
-        for con in cons:
+        for con in server_1.get_connections():
             await con.close()
 
         blocks = bt.get_consecutive_blocks(3, blocks)

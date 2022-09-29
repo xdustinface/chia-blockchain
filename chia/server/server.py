@@ -118,7 +118,7 @@ class ChiaServer:
         name: str = None,
     ):
         # Keeps track of all connections to and from this node.
-        self.all_connections: Dict[bytes32, WSChiaConnection] = {}
+        self._all_connections: Dict[bytes32, WSChiaConnection] = {}
         self.tasks: Set[asyncio.Task] = set()
 
         self._port = port  # TCP port to identify our node
@@ -200,7 +200,7 @@ class ChiaServer:
         while True:
             await asyncio.sleep(600 if is_crawler is None else 2)
             to_remove: List[WSChiaConnection] = []
-            for connection in self.all_connections.values():
+            for connection in self._all_connections.values():
                 if (
                     self._local_type == NodeType.FULL_NODE or self._local_type == NodeType.WALLET
                 ) and connection.connection_type == NodeType.FULL_NODE:
@@ -354,10 +354,10 @@ class ChiaServer:
     async def connection_added(self, connection: WSChiaConnection, on_connect=None):
         # If we already had a connection to this peer_id, close the old one. This is secure because peer_ids are based
         # on TLS public keys
-        if connection.peer_node_id in self.all_connections:
-            con = self.all_connections[connection.peer_node_id]
+        if connection.peer_node_id in self._all_connections:
+            con = self._all_connections[connection.peer_node_id]
             await con.close()
-        self.all_connections[connection.peer_node_id] = connection
+        self._all_connections[connection.peer_node_id] = connection
         if on_connect is not None:
             await on_connect(connection)
 
@@ -366,7 +366,7 @@ class ChiaServer:
             # Don't connect to self
             self.log.debug(f"Not connecting to {target_node}")
             return True
-        for connection in self.all_connections.values():
+        for connection in self._all_connections.values():
             if connection.host == target_node.host and connection.peer_server_port == target_node.port:
                 self.log.debug(f"Not connecting to {target_node}, duplicate connection")
                 return True
@@ -502,8 +502,8 @@ class ChiaServer:
             else:
                 self.banned_peers[connection.peer_host] = ban_until
 
-        if connection.peer_node_id in self.all_connections:
-            self.all_connections.pop(connection.peer_node_id)
+        if connection.peer_node_id in self._all_connections:
+            self._all_connections.pop(connection.peer_node_id)
         self.cancel_tasks_from_peer(connection.peer_node_id)
         on_disconnect = getattr(self.node, "on_disconnect", None)
         if on_disconnect is not None:
@@ -625,7 +625,7 @@ class ChiaServer:
         node_type: NodeType,
         origin_peer: WSChiaConnection,
     ):
-        for node_id, connection in self.all_connections.items():
+        for node_id, connection in self._all_connections.items():
             if node_id == origin_peer.peer_node_id:
                 continue
             if connection.connection_type is node_type:
@@ -637,7 +637,7 @@ class ChiaServer:
             if message_requires_reply(ProtocolMessageTypes(message.type)):
                 # Internal protocol logic error - we will raise, blocking messages to all peers
                 self.log.error(f"Attempt to broadcast message requiring protocol response: {message.type}")
-                for _, connection in self.all_connections.items():
+                for _, connection in self._all_connections.items():
                     if connection.connection_type is node_type:
                         await connection.close(
                             self.invalid_protocol_ban_seconds,
@@ -648,44 +648,48 @@ class ChiaServer:
 
     async def send_to_all(self, messages: List[Message], node_type: NodeType):
         await self.validate_broadcast_message_type(messages, node_type)
-        for _, connection in self.all_connections.items():
+        for _, connection in self._all_connections.items():
             if connection.connection_type is node_type:
                 for message in messages:
                     await connection.send_message(message)
 
     async def send_to_all_except(self, messages: List[Message], node_type: NodeType, exclude: bytes32):
         await self.validate_broadcast_message_type(messages, node_type)
-        for _, connection in self.all_connections.items():
+        for _, connection in self._all_connections.items():
             if connection.connection_type is node_type and connection.peer_node_id != exclude:
                 for message in messages:
                     await connection.send_message(message)
 
     async def send_to_specific(self, messages: List[Message], node_id: bytes32):
-        if node_id in self.all_connections:
-            connection = self.all_connections[node_id]
+        if node_id in self._all_connections:
+            connection = self._all_connections[node_id]
             for message in messages:
                 await connection.send_message(message)
 
     def get_outgoing_connections(self, node_type: Optional[NodeType] = None) -> List[WSChiaConnection]:
         result = []
-        for connection in self.all_connections.values():
+        for connection in self._all_connections.values():
             if node_type is None or connection.connection_type == node_type and connection.is_outbound:
                 result.append(connection)
         return result
 
     def get_connections(self, node_type: Optional[NodeType] = None) -> List[WSChiaConnection]:
-        result = []
-        for _, connection in self.all_connections.items():
-            if node_type is None or connection.connection_type == node_type:
-                result.append(connection)
-        return result
+        if node_type is None:
+            return list(self._all_connections.values())
+        else:
+            return [
+                connection for connection in self._all_connections.values() if connection.connection_type == node_type
+            ]
+
+    def connection_for_peer_id(self, peer_id: bytes32) -> Optional[WSChiaConnection]:
+        return self._all_connections.get(peer_id)
 
     async def close_all_connections(self) -> None:
-        keys = [a for a, b in self.all_connections.items()]
+        keys = [a for a, b in self._all_connections.items()]
         for node_id in keys:
             try:
-                if node_id in self.all_connections:
-                    connection = self.all_connections[node_id]
+                if node_id in self._all_connections:
+                    connection = self._all_connections[node_id]
                     await connection.close()
             except Exception as e:
                 self.log.error(f"Exception while closing connection {e}")

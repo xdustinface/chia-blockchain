@@ -21,8 +21,7 @@ log = logging.getLogger(__name__)
 
 
 async def disconnect_all(server: ChiaServer) -> None:
-    cons = list(server.all_connections.values())[:]
-    for con in cons:
+    for con in server.get_connections():
         await con.close()
 
 
@@ -76,13 +75,13 @@ async def connect_and_get_peer(server_1: ChiaServer, server_2: ChiaServer, self_
     await server_2.start_client(PeerInfo(self_hostname, uint16(server_1._port)))
 
     async def connected():
-        for node_id_c, _ in server_1.all_connections.items():
-            if node_id_c == server_2.node_id:
+        for connection in server_1.get_connections():
+            if connection.peer_node_id == server_2.node_id:
                 return True
         return False
 
     await time_out_assert(10, connected, True)
-    for node_id, wsc in server_1.all_connections.items():
-        if node_id == server_2.node_id:
-            return wsc
+    for connection in server_1.get_connections():
+        if connection.peer_node_id == server_2.node_id:
+            return connection
     assert False

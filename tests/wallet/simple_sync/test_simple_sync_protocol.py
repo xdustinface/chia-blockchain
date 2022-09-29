@@ -63,7 +63,7 @@ class TestSimpleSyncProtocol:
 
         zero_ph = 32 * b"\0"
         junk_ph = 32 * b"\a"
-        fake_wallet_peer = fn_server.all_connections[peer_id]
+        fake_wallet_peer = fn_server.connection_for_peer_id(peer_id)
         msg = wallet_protocol.RegisterForPhUpdates([zero_ph], 0)
         msg_response = await full_node_api.register_interest_in_puzzle_hash(msg, fake_wallet_peer)
 
@@ -251,7 +251,7 @@ class TestSimpleSyncProtocol:
         await server_2.start_client(PeerInfo(self_hostname, uint16(fn_server._port)), None)
         incoming_queue, peer_id = await add_dummy_connection(fn_server, self_hostname, 12312, NodeType.WALLET)
 
-        fake_wallet_peer = fn_server.all_connections[peer_id]
+        fake_wallet_peer = fn_server.connection_for_peer_id(peer_id)
 
         # Farm to create a coin that we'll track
         for i in range(0, num_blocks):
@@ -359,7 +359,7 @@ class TestSimpleSyncProtocol:
         await server_2.start_client(PeerInfo(self_hostname, uint16(fn_server._port)), None)
         incoming_queue, peer_id = await add_dummy_connection(fn_server, self_hostname, 12312, NodeType.WALLET)
 
-        fake_wallet_peer = fn_server.all_connections[peer_id]
+        fake_wallet_peer = fn_server.connectin_for_peer_id(peer_id)
         zero_ph = 32 * b"\0"
 
         # Farm to create a coin that we'll track
@@ -434,7 +434,7 @@ class TestSimpleSyncProtocol:
         await server_2.start_client(PeerInfo(self_hostname, uint16(fn_server._port)), None)
         incoming_queue, peer_id = await add_dummy_connection(fn_server, self_hostname, 12312, NodeType.WALLET)
 
-        fake_wallet_peer = fn_server.all_connections[peer_id]
+        fake_wallet_peer = fn_server.connectin_for_peer_id(peer_id)
         zero_ph = 32 * b"\0"
 
         # Farm to create a coin that we'll track
@@ -511,7 +511,7 @@ class TestSimpleSyncProtocol:
         amount_bin = int_to_bytes(1)
         hint = 32 * b"\5"
 
-        fake_wallet_peer = fn_server.all_connections[peer_id]
+        fake_wallet_peer = fn_server.connectin_for_peer_id(peer_id)
         msg = wallet_protocol.RegisterForPhUpdates([hint], 0)
         msg_response = await full_node_api.register_interest_in_puzzle_hash(msg, fake_wallet_peer)
         assert msg_response.type == ProtocolMessageTypes.respond_to_ph_update.value
@@ -591,8 +591,8 @@ class TestSimpleSyncProtocol:
         amount_bin = int_to_bytes(1)
         hint = 32 * b"\5"
 
-        fake_wallet_peer = fn_server.all_connections[peer_id]
-        fake_wallet_peer_1 = fn_server_1.all_connections[peer_id_1]
+        fake_wallet_peer = fn_server.connectin_for_peer_id(peer_id)
+        fake_wallet_peer_1 = fn_server_1.connectin_for_peer_id(peer_id_1)
         msg = wallet_protocol.RegisterForPhUpdates([hint], 0)
         msg_response = await full_node_api.register_interest_in_puzzle_hash(msg, fake_wallet_peer)
         msg_response_1 = await full_node_api_1.register_interest_in_puzzle_hash(msg, fake_wallet_peer_1)

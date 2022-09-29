@@ -20,7 +20,7 @@ def start_reconnect_task(server: ChiaServer, peer_info_arg: PeerInfo, log, auth:
     async def connection_check():
         while True:
             peer_retry = True
-            for _, connection in server.all_connections.items():
+            for connection in server.get_connections():
                 if connection.get_peer_info() == peer_info or connection.get_peer_info() == peer_info_arg:
                     peer_retry = False
             if peer_retry:

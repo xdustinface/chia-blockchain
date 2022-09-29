@@ -68,8 +68,7 @@ class TestFullSync:
             timeout_seconds, node_height_exactly, True, full_node_3, test_constants.WEIGHT_PROOF_RECENT_BLOCKS + 5 - 1
         )
 
-        cons = list(server_1.all_connections.values())[:]
-        for con in cons:
+        for con in server_1.get_connections():
             await con.close()
         for block in blocks[test_constants.WEIGHT_PROOF_RECENT_BLOCKS + 5 :]:
             await full_node_1.full_node.respond_block(full_node_protocol.RespondBlock(block))
@@ -164,8 +163,7 @@ class TestFullSync:
             return not full_node_3.full_node.sync_store.get_sync_mode()
 
         await time_out_assert(180, fn3_is_not_syncing)
-        cons = list(server_1.all_connections.values())[:]
-        for con in cons:
+        for con in server_1.get_connections():
             await con.close()
         for block in blocks_rest:
             await full_node_3.full_node.respond_block(full_node_protocol.RespondBlock(block))
@@ -306,7 +304,7 @@ class TestFullSync:
         # trigger long sync in full node 2
         peak_block = default_1500_blocks[1050]
         await server_2.start_client(PeerInfo(self_hostname, uint16(server_3._port)), full_node_2.full_node.on_connect)
-        con = server_2.all_connections[full_node_3.full_node.server.node_id]
+        con = server_2.connection_for_peer_id(full_node_3.full_node.server.node_id)
         peak = full_node_protocol.NewPeak(
             peak_block.header_hash,
             peak_block.height,

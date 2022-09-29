@@ -533,11 +533,7 @@ class TestMempoolManager:
             pool_reward_puzzle_hash=reward_ph,
         )
         _, dummy_node_id = await add_dummy_connection(server_1, bt.config["self_hostname"], 100)
-        dummy_peer = None
-        for node_id, wsc in server_1.all_connections.items():
-            if node_id == dummy_node_id:
-                dummy_peer = wsc
-                break
+        dummy_peer = server_1.connection_for_peer_id(dummy_node_id)
 
         for block in blocks:
             await full_node_1.full_node.respond_block(full_node_protocol.RespondBlock(block))
@@ -570,11 +566,7 @@ class TestMempoolManager:
             time_per_block=10,
         )
         _, dummy_node_id = await add_dummy_connection(server_1, bt.config["self_hostname"], 100)
-        dummy_peer = None
-        for node_id, wsc in server_1.all_connections.items():
-            if node_id == dummy_node_id:
-                dummy_peer = wsc
-                break
+        dummy_peer = server_1.connection_for_peer_id(dummy_node_id)
 
         for block in blocks:
             await full_node_1.full_node.respond_block(full_node_protocol.RespondBlock(block))

@@ -173,10 +173,10 @@ class TestDos:
 
         await server_2.start_client(PeerInfo(self_hostname, uint16(server_1._port)), full_node_2.full_node.on_connect)
 
-        assert len(server_1.all_connections) == 1
+        assert len(server_1.get_connections()) == 1
 
-        ws_con: WSChiaConnection = list(server_1.all_connections.values())[0]
-        ws_con_2: WSChiaConnection = list(server_2.all_connections.values())[0]
+        ws_con: WSChiaConnection = server_1.get_connections()[0]
+        ws_con_2: WSChiaConnection = server_2.get_connections()[0]
 
         ws_con.peer_host = "1.2.3.4"
         ws_con_2.peer_host = "1.2.3.4"
@@ -228,10 +228,10 @@ class TestDos:
 
         await server_2.start_client(PeerInfo(self_hostname, uint16(server_1._port)), full_node_2.full_node.on_connect)
 
-        assert len(server_1.all_connections) == 1
+        assert len(server_1.get_connections()) == 1
 
-        ws_con: WSChiaConnection = list(server_1.all_connections.values())[0]
-        ws_con_2: WSChiaConnection = list(server_2.all_connections.values())[0]
+        ws_con: WSChiaConnection = server_1.get_connections()[0]
+        ws_con_2: WSChiaConnection = server_2.get_connections()[0]
 
         ws_con.peer_host = "1.2.3.4"
         ws_con_2.peer_host = "1.2.3.4"
@@ -277,10 +277,10 @@ class TestDos:
 
         await server_2.start_client(PeerInfo(self_hostname, uint16(server_1._port)), full_node_2.full_node.on_connect)
 
-        assert len(server_1.all_connections) == 1
+        assert len(server_1.get_connections()) == 1
 
-        ws_con: WSChiaConnection = list(server_1.all_connections.values())[0]
-        ws_con_2: WSChiaConnection = list(server_2.all_connections.values())[0]
+        ws_con: WSChiaConnection = server_1.get_connections()[0]
+        ws_con_2: WSChiaConnection = server_2.get_connections()[0]
 
         ws_con.peer_host = "1.2.3.4"
         ws_con_2.peer_host = "1.2.3.4"

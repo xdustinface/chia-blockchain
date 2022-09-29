@@ -724,7 +724,7 @@ class TestFullNodeProtocol:
         full_node_1, full_node_2, server_1, server_2, wallet_a, wallet_receiver, bt = wallet_nodes
 
         incoming_queue, dummy_node_id = await add_dummy_connection(server_1, self_hostname, 12312)
-        dummy_peer = server_1.all_connections[dummy_node_id]
+        dummy_peer = server_1.connection_for_peer_id(dummy_node_id)
         expected_requests = 0
         if await full_node_1.full_node.synced():
             expected_requests = 1
@@ -795,7 +795,7 @@ class TestFullNodeProtocol:
         )
         peer = await connect_and_get_peer(server_1, server_2, self_hostname)
         incoming_queue, node_id = await add_dummy_connection(server_1, self_hostname, 12312)
-        fake_peer = server_1.all_connections[node_id]
+        fake_peer = server_1.connection_for_peer_id(node_id)
         puzzle_hashes = []
 
         # Makes a bunch of coins
@@ -1187,7 +1187,7 @@ class TestFullNodeProtocol:
         full_node_1, full_node_2, server_1, server_2, wallet_a, wallet_receiver, bt = wallet_nodes
 
         incoming_queue, dummy_node_id = await add_dummy_connection(server_1, self_hostname, 12315)
-        dummy_peer = server_1.all_connections[dummy_node_id]
+        dummy_peer = server_1.connection_for_peer_id(dummy_node_id)
         _ = await connect_and_get_peer(server_1, server_2, self_hostname)
 
         ph = wallet_a.get_new_puzzlehash()
@@ -1307,7 +1307,7 @@ class TestFullNodeProtocol:
         assert len(full_node_1.full_node.full_node_store.finished_sub_slots) >= num_slots - 1
 
         incoming_queue, dummy_node_id = await add_dummy_connection(server_1, self_hostname, 12315)
-        dummy_peer = server_1.all_connections[dummy_node_id]
+        dummy_peer = server_1.connection_for_peer_id(dummy_node_id)
         await full_node_1.respond_end_of_sub_slot(fnp.RespondEndOfSubSlot(slots[-1]), dummy_peer)
 
         assert len(full_node_1.full_node.full_node_store.finished_sub_slots) >= num_slots
@@ -1389,7 +1389,7 @@ class TestFullNodeProtocol:
         assert len(full_node_1.full_node.full_node_store.finished_sub_slots) >= num_slots - 1
 
         incoming_queue, dummy_node_id = await add_dummy_connection(server_1, self_hostname, 12315)
-        dummy_peer = server_1.all_connections[dummy_node_id]
+        dummy_peer = server_1.connection_for_peer_id(dummy_node_id)
         await full_node_1.respond_end_of_sub_slot(fnp.RespondEndOfSubSlot(slots[-1]), dummy_peer)
 
         assert len(full_node_1.full_node.full_node_store.finished_sub_slots) >= num_slots

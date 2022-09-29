@@ -189,9 +189,9 @@ class FullNodeAPI:
                             break
                         peer_id = peers_with_tx.pop()
                         assert full_node.server is not None
-                        if peer_id not in full_node.server.all_connections:
+                        random_peer = full_node.server.connection_for_peer_id(peer_id)
+                        if random_peer is None:
                             continue
-                        random_peer = full_node.server.all_connections[peer_id]
                         request_tx = full_node_protocol.RequestTransaction(transaction.transaction_id)
                         msg = make_msg(ProtocolMessageTypes.request_transaction, request_tx)
                         await random_peer.send_message(msg)
