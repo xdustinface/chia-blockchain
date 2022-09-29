@@ -370,10 +370,10 @@ class ChiaServer:
         self.all_connections[connection.peer_node_id] = connection
         if connection.connection_type is not None:
             self.connection_by_type[connection.connection_type][connection.peer_node_id] = connection
-            if on_connect is not None:
-                await on_connect(connection)
         else:
             self.log.error(f"Invalid connection type for connection {connection}")
+        if on_connect is not None:
+            await on_connect(connection)
 
     def is_duplicate_or_self_connection(self, target_node: PeerInfo) -> bool:
         if is_localhost(target_node.host) and target_node.port == self._port:
