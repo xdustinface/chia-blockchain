@@ -699,14 +699,10 @@ class ChiaServer:
 
     def get_full_node_outgoing_connections(self) -> List[WSChiaConnection]:
         result = []
-        connections = self.get_full_node_connections()
-        for connection in connections:
+        for connection in self.get_connections(NodeType.FULL_NODE):
             if connection.is_outbound:
                 result.append(connection)
         return result
-
-    def get_full_node_connections(self) -> List[WSChiaConnection]:
-        return list(self.connection_by_type[NodeType.FULL_NODE].values())
 
     def get_connections(self, node_type: Optional[NodeType] = None) -> List[WSChiaConnection]:
         result = []
