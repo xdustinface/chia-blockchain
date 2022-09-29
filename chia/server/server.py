@@ -121,16 +121,6 @@ class ChiaServer:
         self.all_connections: Dict[bytes32, WSChiaConnection] = {}
         self.tasks: Set[asyncio.Task] = set()
 
-        self.connection_by_type: Dict[NodeType, Dict[bytes32, WSChiaConnection]] = {
-            NodeType.FULL_NODE: {},
-            NodeType.DATA_LAYER: {},
-            NodeType.WALLET: {},
-            NodeType.HARVESTER: {},
-            NodeType.FARMER: {},
-            NodeType.TIMELORD: {},
-            NodeType.INTRODUCER: {},
-        }
-
         self._port = port  # TCP port to identify our node
         self._local_type: NodeType = local_type
         self._local_capabilities_for_handshake = capabilities
@@ -368,10 +358,6 @@ class ChiaServer:
             con = self.all_connections[connection.peer_node_id]
             await con.close()
         self.all_connections[connection.peer_node_id] = connection
-        if connection.connection_type is not None:
-            self.connection_by_type[connection.connection_type][connection.peer_node_id] = connection
-        else:
-            self.log.error(f"Invalid connection type for connection {connection}")
         if on_connect is not None:
             await on_connect(connection)
 
@@ -518,15 +504,6 @@ class ChiaServer:
 
         if connection.peer_node_id in self.all_connections:
             self.all_connections.pop(connection.peer_node_id)
-        if connection.connection_type is not None:
-            if connection.peer_node_id in self.connection_by_type[connection.connection_type]:
-                self.connection_by_type[connection.connection_type].pop(connection.peer_node_id)
-        else:
-            # This means the handshake was never finished with this peer
-            self.log.debug(
-                f"Invalid connection type for connection {connection.peer_host},"
-                f" while closing. Handshake never finished."
-            )
         self.cancel_tasks_from_peer(connection.peer_node_id)
         on_disconnect = getattr(self.node, "on_disconnect", None)
         if on_disconnect is not None:
@@ -779,7 +756,7 @@ class ChiaServer:
     def accept_inbound_connections(self, node_type: NodeType) -> bool:
         if not self._local_type == NodeType.FULL_NODE:
             return True
-        inbound_count = len([conn for _, conn in self.connection_by_type[node_type].items() if not conn.is_outbound])
+        inbound_count = len([conn for conn in self.get_connections(node_type) if not conn.is_outbound])
         if node_type == NodeType.FULL_NODE:
             return inbound_count < self.config["target_peer_count"] - self.config["target_outbound_peer_count"]
         if node_type == NodeType.WALLET:
