@@ -184,7 +184,7 @@ class FullNodeDiscovery:
 
     def _num_needed_peers(self) -> int:
         target = self.target_outbound_count
-        outgoing = len(self.server.get_full_node_outgoing_connections())
+        outgoing = len(self.server.get_outgoing_connections(NodeType.FULL_NODE))
         return max(0, target - outgoing)
 
     """
@@ -320,7 +320,7 @@ class FullNodeDiscovery:
 
                 # Only connect out to one peer per network group (/16 for IPv4).
                 groups = set()
-                full_node_connected = self.server.get_full_node_outgoing_connections()
+                full_node_connected = self.server.get_outgoing_connections(NodeType.FULL_NODE)
                 connected = [c.get_peer_info() for c in full_node_connected]
                 connected = [c for c in connected if c is not None]
                 for conn in full_node_connected:

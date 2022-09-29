@@ -69,9 +69,6 @@ class FakeServer:
     async def get_peer_info(self) -> Optional[PeerInfo]:
         return None
 
-    def get_full_node_outgoing_connections(self) -> List[ws.WSChiaConnection]:
-        return []
-
     def is_duplicate_or_self_connection(self, target_node: PeerInfo) -> bool:
         return False
 
