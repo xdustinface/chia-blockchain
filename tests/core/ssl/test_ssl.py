@@ -7,7 +7,7 @@ from chia.protocols.shared_protocol import protocol_version, capabilities
 from chia.server.outbound_message import NodeType
 from chia.server.server import ChiaServer, ssl_context_for_client
 from chia.server.ssl_context import chia_ssl_ca_paths, private_ssl_ca_paths
-from chia.server.ws_connection import WSChiaConnection
+from chia.server.ws_connection import Direction, WSChiaConnection
 from chia.ssl.create_ssl import generate_ca_signed_cert
 from chia.types.peer_info import PeerInfo
 from chia.util.ints import uint16
@@ -25,7 +25,7 @@ async def establish_connection(server: ChiaServer, self_hostname: str, ssl_conte
             ws,
             server._port,
             server.log,
-            True,
+            Direction.Outbound,
             False,
             self_hostname,
             incoming_queue,

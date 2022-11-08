@@ -35,7 +35,7 @@ from chia.protocols.shared_protocol import protocol_version
 from chia.server.introducer_peers import IntroducerPeers
 from chia.server.outbound_message import Message, NodeType
 from chia.server.ssl_context import private_ssl_paths, public_ssl_paths
-from chia.server.ws_connection import WSChiaConnection
+from chia.server.ws_connection import Direction, WSChiaConnection
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.peer_info import PeerInfo
 from chia.util.api_decorators import get_metadata
@@ -318,7 +318,7 @@ class ChiaServer:
                 ws,
                 self._port,
                 self.log,
-                False,
+                Direction.Inbound,
                 False,
                 request.remote,
                 self.incoming_messages,
@@ -466,7 +466,7 @@ class ChiaServer:
                 ws,
                 self._port,
                 self.log,
-                True,
+                Direction.Outbound,
                 False,
                 target_node.host,
                 self.incoming_messages,

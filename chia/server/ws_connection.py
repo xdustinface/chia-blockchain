@@ -5,6 +5,7 @@ import contextlib
 import logging
 import time
 import traceback
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from aiohttp import WSCloseCode, WSMessage, WSMsgType
@@ -28,6 +29,11 @@ from chia.util.network import class_for_type, is_localhost
 LENGTH_BYTES: int = 4
 
 
+class Direction(Enum):
+    Inbound = 1
+    Outbound = 2
+
+
 class WSChiaConnection:
     """
     Represents a connection to another node. Local host and port are ours, while peer host and
@@ -41,7 +47,7 @@ class WSChiaConnection:
         ws: Any,  # Websocket
         server_port: int,
         log: logging.Logger,
-        is_outbound: bool,
+        direction: Direction,
         is_feeler: bool,  # Special type of connection, that disconnects after the handshake.
         peer_host,
         incoming_queue,
@@ -77,7 +83,7 @@ class WSChiaConnection:
         self.log = log
 
         # connection properties
-        self.is_outbound = is_outbound
+        self.direction = direction
         self.is_feeler = is_feeler
 
         # ChiaConnection metrics
@@ -101,11 +107,11 @@ class WSChiaConnection:
         self.request_results: Dict[uint16, Message] = {}
         self.closed = False
         self.connection_type: Optional[NodeType] = None
-        if is_outbound:
+        if direction == Direction.Outbound:
             self.request_nonce: uint16 = uint16(0)
         else:
             # Different nonce to reduce chances of overlap. Each peer will increment the nonce by one for each
-            # request. The receiving peer (not is_outbound), will use 2^15 to 2^16 - 1
+            # request. The receiving peer (not outbound), will use 2^15 to 2^16 - 1
             self.request_nonce = uint16(2**15)
 
         # This means that even if the other peer's boundaries for each minute are not aligned, we will not
@@ -124,7 +130,7 @@ class WSChiaConnection:
         server_port: int,
         local_type: NodeType,
     ) -> None:
-        if self.is_outbound:
+        if self.direction == Direction.Outbound:
             outbound_handshake = make_msg(
                 ProtocolMessageTypes.handshake,
                 Handshake(
@@ -349,9 +355,9 @@ class WSChiaConnection:
         event = asyncio.Event()
 
         # The request nonce is an integer between 0 and 2**16 - 1, which is used to match requests to responses
-        # If is_outbound, 0 <= nonce < 2^15, else  2^15 <= nonce < 2^16
+        # If outbound, 0 <= nonce < 2^15, else  2^15 <= nonce < 2^16
         request_id = self.request_nonce
-        if self.is_outbound:
+        if self.direction == Direction.Outbound:
             self.request_nonce = uint16(self.request_nonce + 1) if self.request_nonce != (2**15 - 1) else uint16(0)
         else:
             self.request_nonce = (

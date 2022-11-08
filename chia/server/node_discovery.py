@@ -15,7 +15,7 @@ from chia.server.address_manager_store import AddressManagerStore
 from chia.server.address_manager_sqlite_store import create_address_manager_from_db
 from chia.server.outbound_message import NodeType, make_msg, Message
 from chia.server.peer_store_resolver import PeerStoreResolver
-from chia.server.server import ChiaServer
+from chia.server.server import ChiaServer, Direction
 from chia.server.ws_connection import WSChiaConnection
 from chia.types.peer_info import PeerInfo, TimestampedPeerInfo
 from chia.util.hash import std_hash
@@ -140,7 +140,7 @@ class FullNodeDiscovery:
 
     async def on_connect(self, peer: WSChiaConnection):
         if (
-            peer.is_outbound is False
+            peer.direction == Direction.Inbound
             and peer.peer_server_port is not None
             and peer.connection_type is NodeType.FULL_NODE
             and self.server._local_type is NodeType.FULL_NODE
@@ -155,7 +155,7 @@ class FullNodeDiscovery:
             if self.relay_queue is not None:
                 self.relay_queue.put_nowait((timestamped_peer_info, 1))
         if (
-            peer.is_outbound
+            peer.direction == Direction.Outbound
             and peer.peer_server_port is not None
             and peer.connection_type is NodeType.FULL_NODE
             and (self.server._local_type is NodeType.FULL_NODE or self.server._local_type is NodeType.WALLET)
@@ -167,7 +167,7 @@ class FullNodeDiscovery:
     # Updates timestamps each time we receive a message for outbound connections.
     async def update_peer_timestamp_on_message(self, peer: WSChiaConnection):
         if (
-            peer.is_outbound
+            peer.direction == Direction.Outbound
             and peer.peer_server_port is not None
             and peer.connection_type is NodeType.FULL_NODE
             and self.server._local_type is NodeType.FULL_NODE
