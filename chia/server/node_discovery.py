@@ -15,8 +15,8 @@ from chia.server.address_manager_store import AddressManagerStore
 from chia.server.address_manager_sqlite_store import create_address_manager_from_db
 from chia.server.outbound_message import NodeType, make_msg, Message
 from chia.server.peer_store_resolver import PeerStoreResolver
-from chia.server.server import ChiaServer, Direction
-from chia.server.ws_connection import WSChiaConnection
+from chia.server.server import ChiaServer
+from chia.server.ws_connection import Direction, WSChiaConnection
 from chia.types.peer_info import PeerInfo, TimestampedPeerInfo
 from chia.util.hash import std_hash
 from chia.util.ints import uint64
@@ -184,7 +184,7 @@ class FullNodeDiscovery:
 
     def _num_needed_peers(self) -> int:
         target = self.target_outbound_count
-        outgoing = len(self.server.get_full_node_outgoing_connections())
+        outgoing = len(self.server.get_connections(NodeType.FULL_NODE, Direction.Outbound))
         return max(0, target - outgoing)
 
     """
@@ -320,7 +320,7 @@ class FullNodeDiscovery:
 
                 # Only connect out to one peer per network group (/16 for IPv4).
                 groups = set()
-                full_node_connected = self.server.get_full_node_outgoing_connections()
+                full_node_connected = self.server.get_connections(NodeType.FULL_NODE, Direction.Outbound)
                 connected = [c.get_peer_info() for c in full_node_connected]
                 connected = [c for c in connected if c is not None]
                 for conn in full_node_connected:
