@@ -653,7 +653,7 @@ class WalletNode:
             if not_checked_puzzle_hashes == set():
                 break
             for chunk in chunks(list(not_checked_puzzle_hashes), 1000):
-                ph_update_res: List[CoinState] = await subscribe_to_phs(chunk, full_node, 0)
+                ph_update_res: List[CoinState] = await subscribe_to_phs(chunk, full_node, fork_height)
                 ph_update_res = list(filter(is_new_state_update, ph_update_res))
                 if not await self.receive_state_from_peer(ph_update_res, full_node, update_finished_height=True):
                     # If something goes wrong, abort sync
