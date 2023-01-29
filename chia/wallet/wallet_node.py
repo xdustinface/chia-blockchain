@@ -1241,7 +1241,7 @@ class WalletNode:
             raise Exception("weight proof peak hash does not match peak")
 
         if weight_proof.get_hash() in self.valid_wp_cache:
-            valid, fork_point, summaries, block_records = self.valid_wp_cache[weight_proof.get_hash()]
+            valid, fork_point, block_records = self.valid_wp_cache[weight_proof.get_hash()]
         else:
             old_proof = self.wallet_state_manager.blockchain.synced_weight_proof
             fork_point = get_wp_fork_point(self.constants, old_proof, weight_proof)
@@ -1253,7 +1253,7 @@ class WalletNode:
             ) = await self._weight_proof_handler.validate_weight_proof(weight_proof, False, old_proof)
             if not valid:
                 raise Exception("weight proof failed validation")
-            self.valid_wp_cache[weight_proof.get_hash()] = valid, fork_point, summaries, block_records
+            self.valid_wp_cache[weight_proof.get_hash()] = valid, fork_point, block_records
 
         end_validation = time.time()
         self.log.info(f"It took {end_validation - start_validation} time to validate the weight proof")
