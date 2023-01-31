@@ -1025,9 +1025,6 @@ class WalletNode:
 
         if peer.peer_node_id in self.synced_peers:
             await self.wallet_state_manager.blockchain.set_finished_sync_up_to(new_peak.height)
-        # todo why do we call this if there was an exception / the sync is not finished
-        async with self.wallet_state_manager.lock:
-            await self.wallet_state_manager.new_peak(new_peak)
 
     async def new_peak_from_trusted(self, new_peak_hb: HeaderBlock, latest_timestamp: uint64, peer: WSChiaConnection):
         current_height: uint32 = await self.wallet_state_manager.blockchain.get_finished_sync_up_to()
@@ -1046,6 +1043,7 @@ class WalletNode:
                 )
                 await self._primary_peer_sync_task
                 self._primary_peer_sync_task = None
+                await self.wallet_state_manager.new_peak(new_peak_hb.height)
                 self.wallet_state_manager.set_sync_mode(False)
 
     async def new_peak_from_untrusted(
@@ -1118,6 +1116,7 @@ class WalletNode:
                 )
                 await self._primary_peer_sync_task
                 self._primary_peer_sync_task = None
+                await self.wallet_state_manager.new_peak(new_peak_hb.height)
             self.log.info(f"New peak wallet.. {new_peak_hb.height} {peer.get_peer_info()} 12")
             return
 
