@@ -1071,7 +1071,6 @@ class WalletNode:
         syncing = False
         if far_behind or len(self.synced_peers) == 0:
             syncing = True
-            self.wallet_state_manager.set_sync_mode(True)
 
         secondary_sync_running = (
             self._secondary_peer_sync_task is not None and self._secondary_peer_sync_task.done() is False
@@ -1085,13 +1084,16 @@ class WalletNode:
             return False
 
         try:
+            if syncing:
+                self.wallet_state_manager.set_sync_mode(True)
             await self.long_sync_from_untrusted(syncing, new_peak_hb, peer)
         except Exception:
             self.log.exception(f"Error syncing to {peer.get_peer_info()}")
             await peer.close()
+            return False
+        finally:
             if syncing:
                 self.wallet_state_manager.set_sync_mode(False)
-            return False
         return True
 
     async def long_sync_from_untrusted(self, syncing: bool, new_peak_hb: HeaderBlock, peer: WSChiaConnection):
