@@ -538,8 +538,7 @@ class WalletStateManager:
 
     @asynccontextmanager
     async def set_sync_mode(self, target_height: uint32) -> AsyncIterator[uint32]:
-        if self.log.level == logging.DEBUG:
-            self.log.debug(f"set_sync_mode enter {self.blockchain.get_finished_sync_up_to()}-{target_height}")
+        self.log.debug(f"set_sync_mode enter {self.blockchain.get_finished_sync_up_to()}-{target_height}")
         async with self.lock:
             start_time = time.time()
             start_height = self.blockchain.get_finished_sync_up_to()
@@ -555,12 +554,11 @@ class WalletStateManager:
             finally:
                 self._sync_target = None
                 self.state_changed("sync_changed")
-                if self.log.level == logging.DEBUG:
-                    self.log.debug(
-                        f"set_sync_mode exit - range: {start_height}-{target_height}, "
-                        f"get_finished_sync_up_to: {self.blockchain.get_finished_sync_up_to()}, "
-                        f"seconds: {time.time() - start_time}"
-                    )
+                self.log.debug(
+                    f"set_sync_mode exit - range: {start_height}-{target_height}, "
+                    f"get_finished_sync_up_to: {self.blockchain.get_finished_sync_up_to()}, "
+                    f"seconds: {time.time() - start_time}"
+                )
 
     async def get_confirmed_spendable_balance_for_wallet(self, wallet_id: int, unspent_records=None) -> uint128:
         """
