@@ -640,7 +640,7 @@ class FullNodeSimulator(FullNodeAPI):
         return all(self.tx_id_in_mempool(tx_id=tx.spend_bundle.name()) for tx in txs if tx.spend_bundle is not None)
 
     async def wallet_is_synced(self, wallet_node: WalletNode) -> bool:
-        wallet_height = await wallet_node.wallet_state_manager.blockchain.get_finished_sync_up_to()
+        wallet_height = wallet_node.wallet_state_manager.blockchain.get_finished_sync_up_to()
         full_node_height = self.full_node.blockchain.get_peak_height()
         has_pending_queue_items = wallet_node.new_peak_queue.has_pending_data_process_items()
         return wallet_height == full_node_height and not has_pending_queue_items

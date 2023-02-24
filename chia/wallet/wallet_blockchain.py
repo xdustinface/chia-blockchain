@@ -177,15 +177,14 @@ class WalletBlockchain(BlockchainInterface):
         return header_block
 
     async def set_finished_sync_up_to(self, height: int, *, in_rollback: bool = False) -> None:
-        if (in_rollback and height >= 0) or (height > await self.get_finished_sync_up_to()):
-            await self._basic_store.set_object("FINISHED_SYNC_UP_TO", uint32(height))
+        if (in_rollback and height >= 0) or (height > self._finished_sync_up_to):
+            new_height = uint32(height)
+            await self._basic_store.set_object("FINISHED_SYNC_UP_TO", new_height)
+            self._finished_sync_up_to = new_height
             await self.clean_block_records()
 
-    async def get_finished_sync_up_to(self) -> uint32:
-        h: Optional[uint32] = await self._basic_store.get_object("FINISHED_SYNC_UP_TO", uint32)
-        if h is None:
-            return uint32(0)
-        return h
+    def get_finished_sync_up_to(self) -> uint32:
+        return self._finished_sync_up_to
 
     def get_latest_timestamp(self) -> uint64:
         return self._latest_timestamp
@@ -215,7 +214,7 @@ class WalletBlockchain(BlockchainInterface):
         Cleans the cache so that we only maintain relevant blocks. This removes
         block records that have height < peak - CACHE_SIZE.
         """
-        height_limit = max(0, (await self.get_finished_sync_up_to()) - self.CACHE_SIZE)
+        height_limit = max(0, self._finished_sync_up_to - self.CACHE_SIZE)
         if len(self._block_records) < self.CACHE_SIZE:
             return None
 

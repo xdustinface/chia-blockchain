@@ -518,7 +518,7 @@ class WalletRpcApi:
         return {"synced": synced, "syncing": syncing, "genesis_initialized": True}
 
     async def get_height_info(self, request: Dict) -> EndpointResult:
-        height = await self.service.wallet_state_manager.blockchain.get_finished_sync_up_to()
+        height = self.service.wallet_state_manager.blockchain.get_finished_sync_up_to()
         return {"height": height}
 
     async def get_network_info(self, request: Dict) -> EndpointResult:

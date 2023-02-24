@@ -1125,7 +1125,7 @@ class WalletNode:
         self, new_peak_hb: HeaderBlock, peer: WSChiaConnection, request_time: uint64
     ) -> bool:
         far_behind: bool = (
-            new_peak_hb.height - await self.wallet_state_manager.blockchain.get_finished_sync_up_to()
+            new_peak_hb.height - self.wallet_state_manager.blockchain.get_finished_sync_up_to()
             > self.LONG_SYNC_THRESHOLD
         )
 
@@ -1163,7 +1163,7 @@ class WalletNode:
         return True
 
     async def long_sync_from_untrusted(self, syncing: bool, new_peak_hb: HeaderBlock, peer: WSChiaConnection):
-        current_height: uint32 = await self.wallet_state_manager.blockchain.get_finished_sync_up_to()
+        current_height: uint32 = self.wallet_state_manager.blockchain.get_finished_sync_up_to()
         weight_proof, summaries, block_records = await self.fetch_and_validate_the_weight_proof(peer, new_peak_hb)
         old_proof = self.wallet_state_manager.blockchain.synced_weight_proof
         # In this case we will not rollback so it's OK to check some older updates as well, to ensure
@@ -1258,8 +1258,7 @@ class WalletNode:
 
         blocks.reverse()
         # Roll back coins and transactions
-        peak_height = await self.wallet_state_manager.blockchain.get_finished_sync_up_to()
-        if fork_height < peak_height:
+        if fork_height < self.wallet_state_manager.blockchain.get_finished_sync_up_to():
             self.log.info(f"Rolling back to {fork_height}")
             # we should clear all peers since this is a full rollback
             await self.perform_atomic_rollback(fork_height)

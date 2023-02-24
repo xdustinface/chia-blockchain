@@ -17,7 +17,7 @@ from tests.util.misc import assert_runtime
 
 
 async def wallet_height_at_least(wallet_node, h):
-    height = await wallet_node.wallet_state_manager.blockchain.get_finished_sync_up_to()
+    height = wallet_node.wallet_state_manager.blockchain.get_finished_sync_up_to()
     if height == h:
         return True
     return False

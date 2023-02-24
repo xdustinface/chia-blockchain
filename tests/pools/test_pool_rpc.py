@@ -634,7 +634,7 @@ class TestPoolWalletRpc:
             assert len(await wallet_node.wallet_state_manager.tx_store.get_unconfirmed_for_wallet(2)) == 0
             peak = full_node_api.full_node.blockchain.get_peak()
             assert peak is not None
-            assert await wallet_node.wallet_state_manager.blockchain.get_finished_sync_up_to() == peak.height
+            assert wallet_node.wallet_state_manager.blockchain.get_finished_sync_up_to() == peak.height
             assert (await wallet.get_confirmed_balance()) == main_expected_confirmed_balance
 
             num_trials = 3

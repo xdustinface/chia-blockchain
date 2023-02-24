@@ -729,7 +729,7 @@ class PoolWallet:
             history: List[Tuple[uint32, CoinSpend]] = await self.get_spend_history()
             last_height: uint32 = history[-1][0]
             if (
-                await self.wallet_state_manager.blockchain.get_finished_sync_up_to()
+                self.wallet_state_manager.blockchain.get_finished_sync_up_to()
                 <= last_height + current_state.current.relative_lock_height
             ):
                 raise ValueError(
@@ -765,7 +765,7 @@ class PoolWallet:
             history: List[Tuple[uint32, CoinSpend]] = await self.get_spend_history()
             last_height: uint32 = history[-1][0]
             if (
-                await self.wallet_state_manager.blockchain.get_finished_sync_up_to()
+                self.wallet_state_manager.blockchain.get_finished_sync_up_to()
                 <= last_height + current_state.current.relative_lock_height
             ):
                 raise ValueError(

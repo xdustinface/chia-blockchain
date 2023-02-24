@@ -518,7 +518,7 @@ class WalletStateManager:
         if "simulator" in self.config.get("selected_network", ""):
             return True  # sim is always synced if we have a genesis block.
 
-        if latest.height - await self.blockchain.get_finished_sync_up_to() > 1:
+        if latest.height - self.blockchain.get_finished_sync_up_to() > 1:
             return False
 
         latest_timestamp = self.blockchain.get_latest_timestamp()
@@ -539,10 +539,10 @@ class WalletStateManager:
     @asynccontextmanager
     async def set_sync_mode(self, target_height: uint32) -> AsyncIterator[uint32]:
         if self.log.level == logging.DEBUG:
-            self.log.debug(f"set_sync_mode enter {await self.blockchain.get_finished_sync_up_to()}-{target_height}")
+            self.log.debug(f"set_sync_mode enter {self.blockchain.get_finished_sync_up_to()}-{target_height}")
         async with self.lock:
             start_time = time.time()
-            start_height = await self.blockchain.get_finished_sync_up_to()
+            start_height = self.blockchain.get_finished_sync_up_to()
             self._sync_target = target_height
             self.log.info(f"set_sync_mode syncing - range: {start_height}-{target_height}")
             self.state_changed("sync_changed")
@@ -558,7 +558,7 @@ class WalletStateManager:
                 if self.log.level == logging.DEBUG:
                     self.log.debug(
                         f"set_sync_mode exit - range: {start_height}-{target_height}, "
-                        f"get_finished_sync_up_to: {await self.blockchain.get_finished_sync_up_to()}, "
+                        f"get_finished_sync_up_to: {self.blockchain.get_finished_sync_up_to()}, "
                         f"seconds: {time.time() - start_time}"
                     )
 
