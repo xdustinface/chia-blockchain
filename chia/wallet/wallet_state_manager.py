@@ -1273,8 +1273,8 @@ class WalletStateManager:
                                         break
 
                                     coin_name = new_singleton_coin.name()
-                                    existing = await self.coin_store.get_coin_record(coin_name)
-                                    if existing is None:
+                                    # TODO, add something like `WalletCoinStore.has_coin`
+                                    if await self.coin_store.get_coin_record(coin_name) is None:
                                         await self.coin_added(
                                             new_singleton_coin,
                                             uint32(curr_coin_state.spent_height),
