@@ -1254,7 +1254,7 @@ class WalletStateManager:
                                     )
 
                         if record.wallet_type == WalletType.POOLING_WALLET:
-                            if coin_state.spent_height is not None and coin_state.coin.amount == uint64(1):
+                            if coin_state.coin.amount == uint64(1):
                                 pool_wallet = self.get_wallet(id=uint32(record.wallet_id), required_type=PoolWallet)
                                 curr_coin_state: CoinState = coin_state
 
