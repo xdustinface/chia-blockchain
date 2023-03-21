@@ -1257,7 +1257,8 @@ class WalletStateManager:
                             if coin_state.coin.amount == uint64(1):
                                 pool_wallet = self.get_wallet(id=uint32(record.wallet_id), required_type=PoolWallet)
                                 curr_coin_state: CoinState = coin_state
-
+                                # This loop pre-syncs all pool wallet state changes up to the latest state of the peer
+                                # after the first received state update was received from the peer.
                                 while curr_coin_state.spent_height is not None:
                                     cs: CoinSpend = await self.wallet_node.fetch_puzzle_solution(
                                         curr_coin_state.spent_height, curr_coin_state.coin, peer
