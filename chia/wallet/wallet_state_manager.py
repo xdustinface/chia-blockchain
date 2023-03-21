@@ -1260,15 +1260,15 @@ class WalletStateManager:
                                 # This loop pre-syncs all pool wallet state changes up to the latest state of the peer
                                 # after the first received state update was received from the peer.
                                 while curr_coin_state.spent_height is not None:
-                                    cs: CoinSpend = await self.wallet_node.fetch_puzzle_solution(
+                                    coin_spend = await self.wallet_node.fetch_puzzle_solution(
                                         curr_coin_state.spent_height, curr_coin_state.coin, peer
                                     )
                                     success = await pool_wallet.apply_state_transition(
-                                        cs, uint32(curr_coin_state.spent_height)
+                                        coin_spend, uint32(curr_coin_state.spent_height)
                                     )
                                     if not success:
                                         break
-                                    new_singleton_coin: Optional[Coin] = pool_wallet.get_next_interesting_coin(cs)
+                                    new_singleton_coin = pool_wallet.get_next_interesting_coin(coin_spend)
                                     if new_singleton_coin is None:
                                         # No more singleton (maybe destroyed?)
                                         break
