@@ -1287,12 +1287,13 @@ class WalletStateManager:
                                     await self.coin_store.set_spent(
                                         curr_coin_state.coin.name(), uint32(curr_coin_state.spent_height)
                                     )
-                                    await self.add_interested_coin_ids([new_singleton_coin_name])
                                     new_coin_state: List[CoinState] = await self.wallet_node.get_coin_state(
                                         [new_singleton_coin_name], peer=peer, fork_height=fork_height
                                     )
                                     assert len(new_coin_state) == 1
                                     curr_coin_state = new_coin_state[0]
+                                    if curr_coin_state.spent_height is None:
+                                        await self.add_interested_coin_ids([new_singleton_coin_name])
                         if record.wallet_type == WalletType.DATA_LAYER:
                             singleton_spend = await self.wallet_node.fetch_puzzle_solution(
                                 coin_state.spent_height, coin_state.coin, peer
