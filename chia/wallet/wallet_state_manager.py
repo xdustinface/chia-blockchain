@@ -1272,9 +1272,9 @@ class WalletStateManager:
                                         # No more singleton (maybe destroyed?)
                                         break
 
-                                    coin_name = new_singleton_coin.name()
+                                    new_singleton_coin_name = new_singleton_coin.name()
                                     # TODO, add something like `WalletCoinStore.has_coin`
-                                    if await self.coin_store.get_coin_record(coin_name) is None:
+                                    if await self.coin_store.get_coin_record(new_singleton_coin_name) is None:
                                         await self.coin_added(
                                             new_singleton_coin,
                                             uint32(curr_coin_state.spent_height),
@@ -1282,14 +1282,14 @@ class WalletStateManager:
                                             uint32(record.wallet_id),
                                             record.wallet_type,
                                             peer,
-                                            coin_name,
+                                            new_singleton_coin_name,
                                         )
                                     await self.coin_store.set_spent(
                                         curr_coin_state.coin.name(), uint32(curr_coin_state.spent_height)
                                     )
                                     await self.add_interested_coin_ids([new_singleton_coin.name()])
                                     new_coin_state: List[CoinState] = await self.wallet_node.get_coin_state(
-                                        [coin_name], peer=peer, fork_height=fork_height
+                                        [new_singleton_coin_name], peer=peer, fork_height=fork_height
                                     )
                                     assert len(new_coin_state) == 1
                                     curr_coin_state = new_coin_state[0]
