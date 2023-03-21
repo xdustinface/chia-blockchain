@@ -1287,7 +1287,7 @@ class WalletStateManager:
                                     await self.coin_store.set_spent(
                                         curr_coin_state.coin.name(), uint32(curr_coin_state.spent_height)
                                     )
-                                    await self.add_interested_coin_ids([new_singleton_coin.name()])
+                                    await self.add_interested_coin_ids([new_singleton_coin_name])
                                     new_coin_state: List[CoinState] = await self.wallet_node.get_coin_state(
                                         [new_singleton_coin_name], peer=peer, fork_height=fork_height
                                     )
