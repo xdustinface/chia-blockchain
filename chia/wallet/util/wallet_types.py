@@ -29,6 +29,10 @@ class WalletType(IntEnum):
     DATA_LAYER_OFFER = 12
 
 
+class CoinType(IntEnum):
+    NORMAL = 0
+
+
 class AmountWithPuzzlehash(TypedDict):
     amount: uint64
     puzzlehash: bytes32
