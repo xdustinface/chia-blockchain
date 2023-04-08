@@ -72,6 +72,7 @@ from chia.wallet.transaction_record import TransactionRecord
 from chia.wallet.uncurried_puzzle import uncurry_puzzle
 from chia.wallet.util.address_type import AddressType
 from chia.wallet.util.compute_hints import compute_coin_hints
+from chia.wallet.util.puzzle_decorator import PuzzleDecoratorManager
 from chia.wallet.util.transaction_type import TransactionType
 from chia.wallet.util.wallet_sync_utils import PeerRequestException, last_change_height_cs
 from chia.wallet.util.wallet_types import CoinType, WalletIdentifier, WalletType
@@ -133,6 +134,7 @@ class WalletStateManager:
     default_cats: Dict[str, Any]
     asset_to_wallet_map: Dict[AssetType, Any]
     initial_num_public_keys: int
+    decorator_manager: PuzzleDecoratorManager
 
     @staticmethod
     async def create(
@@ -153,7 +155,7 @@ class WalletStateManager:
         self.log = logging.getLogger(name if name else __name__)
         self.lock = asyncio.Lock()
         self.log.debug(f"Starting in db path: {db_path}")
-
+        fingerprint = private_key.get_g1().get_fingerprint()
         sql_log_path: Optional[Path] = None
         if self.config.get("log_sqlite_cmds", False):
             sql_log_path = path_from_root(self.root_path, "log/wallet_sql.log")
@@ -191,6 +193,8 @@ class WalletStateManager:
         self.state_changed_callback = None
         self.pending_tx_callback = None
         self.db_path = db_path
+        puzzle_decorators = self.config.get("puzzle_decorators", {}).get(fingerprint, [])
+        self.decorator_manager = PuzzleDecoratorManager.create(puzzle_decorators)
 
         main_wallet_info = await self.user_store.get_wallet_by_id(1)
         assert main_wallet_info is not None

@@ -25,7 +25,6 @@ from chia.wallet.puzzles.p2_delegated_puzzle_or_hidden_puzzle import (
     DEFAULT_HIDDEN_PUZZLE_HASH,
     calculate_synthetic_secret_key,
     puzzle_for_pk,
-    puzzle_hash_for_pk,
     solution_for_conditions,
 )
 from chia.wallet.puzzles.puzzle_utils import (
@@ -42,6 +41,7 @@ from chia.wallet.secret_key_store import SecretKeyStore
 from chia.wallet.sign_coin_spends import sign_coin_spends
 from chia.wallet.transaction_record import TransactionRecord
 from chia.wallet.util.compute_memos import compute_memos
+from chia.wallet.util.puzzle_decorator import PuzzleDecoratorManager
 from chia.wallet.util.transaction_type import TransactionType
 from chia.wallet.util.wallet_types import AmountWithPuzzlehash, WalletType
 from chia.wallet.wallet_coin_record import WalletCoinRecord
@@ -168,7 +168,7 @@ class Wallet:
         return puzzle_for_pk(pubkey)
 
     def puzzle_hash_for_pk(self, pubkey: G1Element) -> bytes32:
-        return puzzle_hash_for_pk(pubkey)
+        return self.wallet_state_manager.decorator_manager.decorate(puzzle_for_pk(pubkey)).get_tree_hash()
 
     async def convert_puzzle_hash(self, puzzle_hash: bytes32) -> bytes32:
         return puzzle_hash  # Looks unimpressive, but it's more complicated in other wallets
@@ -199,7 +199,7 @@ class Wallet:
 
     async def puzzle_for_puzzle_hash(self, puzzle_hash: bytes32) -> Program:
         public_key = await self.hack_populate_secret_key_for_puzzle_hash(puzzle_hash)
-        return puzzle_for_pk(public_key)
+        return self.wallet_state_manager.decorator_manager.decorate(puzzle_for_pk(public_key))
 
     async def get_new_puzzle(self) -> Program:
         dr = await self.wallet_state_manager.get_unused_derivation_record(self.id())
@@ -325,12 +325,16 @@ class Wallet:
         max_coin_amount: Optional[uint64] = None,
         exclude_coin_amounts: Optional[List[uint64]] = None,
         exclude_coins: Optional[Set[Coin]] = None,
+        puzzle_decorator_override: Optional[List[Dict[str, Any]]] = None,
         reuse_puzhash: Optional[bool] = None,
     ) -> List[CoinSpend]:
         """
         Generates a unsigned transaction in form of List(Puzzle, Solutions)
         Note: this must be called under a wallet state manager lock
         """
+        decorator_manager: PuzzleDecoratorManager = self.wallet_state_manager.decorator_manager
+        if puzzle_decorator_override is not None:
+            decorator_manager = PuzzleDecoratorManager.create(puzzle_decorator_override)
         if primaries_input is None:
             primaries: Optional[List[AmountWithPuzzlehash]] = None
             total_amount = amount + fee
@@ -417,13 +421,23 @@ class Wallet:
             # Only one coin creates outputs
             if origin_id in (None, coin.name()):
                 origin_id = coin.name()
+                public_key = await self.hack_populate_secret_key_for_puzzle_hash(coin.puzzle_hash)
+                inner_puzzle = puzzle_for_pk(public_key)
+                decorated_target_puzhash = decorator_manager.decorate_target_puzhash(inner_puzzle, newpuzzlehash)
+                target_primary = {}
+                memos = decorator_manager.decorate_memos(inner_puzzle, newpuzzlehash, memos)
                 if primaries is None:
                     if amount > 0:
-                        primaries = [{"puzzlehash": newpuzzlehash, "amount": uint64(amount), "memos": memos}]
+                        primaries = [{"puzzlehash": decorated_target_puzhash, "amount": uint64(amount), "memos": memos}]
+                        target_primary = {
+                            "puzzlehash": newpuzzlehash,
+                            "amount": uint64(amount),
+                            "memos": memos,
+                        }
                     else:
                         primaries = []
                 else:
-                    primaries.append({"puzzlehash": newpuzzlehash, "amount": uint64(amount), "memos": memos})
+                    primaries.append({"puzzlehash": decorated_target_puzhash, "amount": uint64(amount), "memos": memos})
                 if change > 0:
                     if reuse_puzhash:
                         change_puzzle_hash: bytes32 = coin.puzzle_hash
@@ -440,6 +454,9 @@ class Wallet:
                     message_list.append(Coin(coin.name(), primary["puzzlehash"], primary["amount"]).name())
                 message: bytes32 = std_hash(b"".join(message_list))
                 puzzle: Program = await self.puzzle_for_puzzle_hash(coin.puzzle_hash)
+                assert (
+                    puzzle.get_tree_hash() == coin.puzzle_hash
+                ), "Decorated puzzle doesn't match the coin puzzle hash, please check your puzzle_decorators config."
                 solution: Program = self.make_solution(
                     primaries=primaries,
                     fee=fee,
@@ -447,6 +464,7 @@ class Wallet:
                     coin_announcements_to_assert=coin_announcements_bytes,
                     puzzle_announcements_to_assert=puzzle_announcements_bytes,
                 )
+                solution = decorator_manager.solve(inner_puzzle, [target_primary], solution)
                 primary_announcement_hash = Announcement(coin.name(), message).name()
 
                 spends.append(
@@ -463,8 +481,11 @@ class Wallet:
             if coin.name() == origin_id:
                 continue
 
+            public_key = await self.hack_populate_secret_key_for_puzzle_hash(coin.puzzle_hash)
+            inner_puzzle = puzzle_for_pk(public_key)
             puzzle = await self.puzzle_for_puzzle_hash(coin.puzzle_hash)
             solution = self.make_solution(primaries=[], coin_announcements_to_assert={primary_announcement_hash})
+            solution = decorator_manager.solve(inner_puzzle, [], solution)
             spends.append(
                 CoinSpend(
                     coin, SerializedProgram.from_bytes(bytes(puzzle)), SerializedProgram.from_bytes(bytes(solution))
@@ -513,6 +534,7 @@ class Wallet:
         max_coin_amount: Optional[uint64] = None,
         exclude_coin_amounts: Optional[List[uint64]] = None,
         exclude_coins: Optional[Set[Coin]] = None,
+        puzzle_decorator_override: Optional[List[Dict[str, Any]]] = None,
         reuse_puzhash: Optional[bool] = None,
     ) -> TransactionRecord:
         """
@@ -542,6 +564,7 @@ class Wallet:
             max_coin_amount=max_coin_amount,
             exclude_coin_amounts=exclude_coin_amounts,
             exclude_coins=exclude_coins,
+            puzzle_decorator_override=puzzle_decorator_override,
             reuse_puzhash=reuse_puzhash,
         )
         assert len(transaction) > 0

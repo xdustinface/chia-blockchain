@@ -584,6 +584,13 @@ wallet:
   # The amount someone has to pay you in mojos for you to see their notification
   required_notification_amount: 10000000
 
+  #################################
+  #  Inner puzzle decorators      #
+  #################################
+  # Default puzzle decorator settings
+  # Example: {fingerprint1:[{"decorator": "CLAWBACK", "clawback_timelock": 3600}, {"decorator": "decorator2", ...}, ...]}
+  puzzle_decorators: {}
+
 data_layer:
   # TODO: consider name
   # TODO: organize consistently with other sections
