@@ -249,6 +249,24 @@ class WalletNode:
                     self.log.info("Disabled resync for wallet fingerprint: %s", fingerprint)
             save_config(self.root_path, "config.yaml", config)
 
+    def set_auto_claim(self, enabled: bool, tx_fee: int, min_amount: int, batch_size: int) -> Dict[str, Any]:
+        if tx_fee < 0:
+            tx_fee = 0
+        if batch_size < 1:
+            batch_size = 50
+        with lock_and_load_config(self.root_path, "config.yaml") as config:
+            config["wallet"]["auto_claim"] = enabled
+            config["wallet"]["auto_claim_tx_fee"] = tx_fee
+            config["wallet"]["auto_claim_min_amount"] = min_amount
+            config["wallet"]["auto_claim_coin_size"] = batch_size
+            save_config(self.root_path, "config.yaml", config)
+        return {
+            "auto_claim": enabled,
+            "auto_claim_tx_fee": tx_fee,
+            "auto_claim_min_amount": min_amount,
+            "auto_claim_coin_size": batch_size,
+        }
+
     async def reset_sync_db(self, db_path: Union[Path, str], fingerprint: int) -> bool:
         conn: aiosqlite.Connection
         # are not part of core wallet tables, but might appear later
@@ -560,6 +578,9 @@ class WalletNode:
                     peer = item.data[1]
                     assert peer is not None
                     await self.new_peak_wallet(new_peak, peer)
+                    # Check if any coin needs auto spending
+                    if self.config.get("auto_claim", True):
+                        await self.wallet_state_manager.auto_claim_coins()
                 else:
                     self.log.debug("Pulled from queue: UNKNOWN %s", item.item_type)
                     assert False

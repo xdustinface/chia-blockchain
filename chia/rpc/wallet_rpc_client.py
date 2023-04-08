@@ -170,6 +170,7 @@ class WalletRpcClient(RpcClient):
         max_coin_amount: uint64 = uint64(0),
         exclude_amounts: Optional[List[uint64]] = None,
         exclude_coin_ids: Optional[List[str]] = None,
+        puzzle_decorator_override: Optional[List[Dict[str, Any]]] = None,
         reuse_puzhash: Optional[bool] = None,
     ) -> TransactionRecord:
         if memos is None:
@@ -182,6 +183,7 @@ class WalletRpcClient(RpcClient):
                 "max_coin_amount": max_coin_amount,
                 "exclude_coin_amounts": exclude_amounts,
                 "exclude_coin_ids": exclude_coin_ids,
+                "puzzle_decorator": puzzle_decorator_override,
                 "reuse_puzhash": reuse_puzhash,
             }
         else:
@@ -195,6 +197,7 @@ class WalletRpcClient(RpcClient):
                 "max_coin_amount": max_coin_amount,
                 "exclude_coin_amounts": exclude_amounts,
                 "exclude_coin_ids": exclude_coin_ids,
+                "puzzle_decorator": puzzle_decorator_override,
                 "reuse_puzhash": reuse_puzhash,
             }
         res = await self.fetch("send_transaction", send_dict)
@@ -221,6 +224,24 @@ class WalletRpcClient(RpcClient):
             )
 
         return TransactionRecord.from_json_dict_convenience(response["transaction"])
+
+    async def get_clawback_coins(self, wallet_id: int, start: int = 0, end: int = 50, reverse: bool = False) -> Dict:
+        response = await self.fetch(
+            "get_clawback_coins",
+            {"wallet_id": wallet_id, "start": start, "end": end, "reverse": reverse},
+        )
+        return response
+
+    async def spend_clawback_coins(
+        self,
+        merkle_coin_ids: List[str],
+        fee: int = 0,
+    ) -> Dict:
+        response = await self.fetch(
+            "spend_clawback_coins",
+            {"merkle_coin_ids": merkle_coin_ids, "fee": fee},
+        )
+        return response
 
     async def delete_unconfirmed_transactions(self, wallet_id: int) -> None:
         await self.fetch(

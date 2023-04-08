@@ -83,6 +83,17 @@ record_7 = WalletCoinRecord(
     CoinType.NORMAL,
     None,
 )
+record_8 = WalletCoinRecord(
+    coin_8,
+    uint32(1),
+    uint32(0),
+    False,
+    False,
+    WalletType.STANDARD_WALLET,
+    1,
+    CoinType.CLAWBACK,
+    "CLAWBACK",
+)
 
 
 @pytest.mark.asyncio
@@ -120,6 +131,7 @@ async def test_bulk_get() -> None:
         await store.add_coin_record(record_2)
         await store.add_coin_record(record_3)
         await store.add_coin_record(record_4)
+        await store.add_coin_record(record_8)
 
         store = await WalletCoinStore.create(db_wrapper)
         records = await store.get_coin_records([coin_1.name(), coin_2.name(), token_bytes(32), coin_4.name()])
@@ -168,6 +180,7 @@ async def test_get_unspent_coins_for_wallet() -> None:
         await store.add_coin_record(record_5)  # wallet 1
         await store.add_coin_record(record_6)  # this is spent and wallet 2
         await store.add_coin_record(record_7)  # wallet 2
+        await store.add_coin_record(record_8)
 
         assert await store.get_unspent_coins_for_wallet(1) == set([record_5])
         assert await store.get_unspent_coins_for_wallet(2) == set([record_7])
@@ -191,6 +204,8 @@ async def test_get_unspent_coins_for_wallet() -> None:
         assert await store.get_unspent_coins_for_wallet(2) == set()
         assert await store.get_unspent_coins_for_wallet(3) == set()
 
+        assert await store.get_unspent_coins_for_wallet(1, coin_type=CoinType.CLAWBACK) == set([record_8])
+
 
 @pytest.mark.asyncio
 async def test_get_all_unspent_coins() -> None:
@@ -202,6 +217,7 @@ async def test_get_all_unspent_coins() -> None:
         await store.add_coin_record(record_1)  # not spent
         await store.add_coin_record(record_2)  # not spent
         await store.add_coin_record(record_3)  # spent
+        await store.add_coin_record(record_8)  # spent
         assert await store.get_all_unspent_coins() == set([record_1, record_2])
 
         await store.add_coin_record(record_4)  # spent
@@ -224,6 +240,8 @@ async def test_get_all_unspent_coins() -> None:
         await store.set_spent(coin_2.name(), uint32(12))
         await store.set_spent(coin_1.name(), uint32(12))
         assert await store.get_all_unspent_coins() == set()
+
+        assert await store.get_all_unspent_coins(coin_type=CoinType.CLAWBACK) == set([record_8])
 
 
 @pytest.mark.asyncio
@@ -397,19 +415,23 @@ async def test_count_small_unspent() -> None:
         await store.add_coin_record(r1)
         await store.add_coin_record(r2)
         await store.add_coin_record(r3)
+        await store.add_coin_record(record_8)
 
         assert await store.count_small_unspent(5) == 3
         assert await store.count_small_unspent(4) == 2
         assert await store.count_small_unspent(3) == 2
         assert await store.count_small_unspent(2) == 1
         assert await store.count_small_unspent(1) == 0
+        assert await store.count_small_unspent(3, coin_type=CoinType.CLAWBACK) == 1
 
         await store.set_spent(coin_2.name(), uint32(12))
+        await store.set_spent(coin_8.name(), uint32(12))
 
         assert await store.count_small_unspent(5) == 2
         assert await store.count_small_unspent(4) == 1
         assert await store.count_small_unspent(3) == 1
         assert await store.count_small_unspent(2) == 1
+        assert await store.count_small_unspent(3, coin_type=CoinType.CLAWBACK) == 0
         assert await store.count_small_unspent(1) == 0
 
 
@@ -423,9 +445,13 @@ async def test_get_coin_records_between() -> None:
         await store.add_coin_record(record_1)  # not spent
         await store.add_coin_record(record_2)  # not spent
         await store.add_coin_record(record_5)  # spent
+        await store.add_coin_record(record_8)  # spent
 
         records = await store.get_coin_records_between(1, 0, 0)
         assert len(records) == 0
         records = await store.get_coin_records_between(1, 0, 3)
         assert len(records) == 1
         assert records[0] == record_5
+        records = await store.get_coin_records_between(1, 0, 4, coin_type=CoinType.CLAWBACK)
+        assert len(records) == 1
+        assert records[0] == record_8
