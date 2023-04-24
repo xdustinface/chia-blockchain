@@ -1105,25 +1105,27 @@ class WalletRpcApi:
         if "names" not in request:
             raise ValueError("Names not in request")
         coin_ids = [bytes32.from_hexstr(name) for name in request["names"]]
-        kwargs: Dict[str, Any] = {
-            "coin_id_filter": HashFilter.include(coin_ids),
-        }
 
         confirmed_range = UInt32Range()
         if "start_height" in request:
             confirmed_range = dataclasses.replace(confirmed_range, start=uint32(request["start_height"]))
         if "end_height" in request:
             confirmed_range = dataclasses.replace(confirmed_range, stop=uint32(request["end_height"]))
-        if confirmed_range != UInt32Range():
-            kwargs["confirmed_range"] = confirmed_range
 
+        spent_range = UInt32Range()
         if "include_spent_coins" in request and not str2bool(request["include_spent_coins"]):
-            kwargs["spent_range"] = UInt32Range(start=uint32(uint32.MAXIMUM_EXCLUSIVE - 1))
+            spent_range = dataclasses.replace(spent_range, start=uint32(uint32.MAXIMUM_EXCLUSIVE - 1))
 
         async with self.service.wallet_state_manager.lock:
-            coin_records: List[CoinRecord] = await self.service.wallet_state_manager.get_coin_records_by_coin_ids(
-                **kwargs
+            result = await self.service.wallet_state_manager.coin_store.get_coin_records(
+                coin_id_filter=HashFilter.include(coin_ids),
+                confirmed_range=confirmed_range,
+                spent_range=spent_range,
             )
+            coin_records = [
+                await self.service.wallet_state_manager.get_coin_record_by_wallet_record(record)
+                for record in result.records
+            ]
             missed_coins: List[str] = [
                 "0x" + c_id.hex() for c_id in coin_ids if c_id not in [cr.name for cr in coin_records]
             ]

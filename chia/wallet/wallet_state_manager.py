@@ -1569,10 +1569,6 @@ class WalletStateManager:
         timestamp: uint64 = await self.wallet_node.get_timestamp_for_height(wr.confirmed_block_height)
         return wr.to_coin_record(timestamp)
 
-    async def get_coin_records_by_coin_ids(self, **kwargs) -> List[CoinRecord]:
-        result = await self.coin_store.get_coin_records(**kwargs)
-        return [await self.get_coin_record_by_wallet_record(record) for record in result.records]
-
     async def get_wallet_for_coin(self, coin_id: bytes32) -> Optional[WalletProtocol]:
         coin_record = await self.coin_store.get_coin_record(coin_id)
         if coin_record is None:
