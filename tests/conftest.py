@@ -53,6 +53,7 @@ from pathlib import Path
 from chia.simulator.block_tools import BlockTools, create_block_tools, create_block_tools_async, test_constants
 from chia.simulator.keyring import TempKeyring
 from chia.simulator.setup_nodes import setup_farmer_multi_harvester
+from chia.util.config import config_path_for_filename
 from chia.util.keyring_wrapper import KeyringWrapper
 
 
@@ -814,7 +815,8 @@ def chia_root_fixture(tmp_path: Path, scripts_path: Path) -> ChiaRoot:
     root = ChiaRoot(path=tmp_path.joinpath("chia_root"), scripts_path=scripts_path)
     root.run(args=["init"])
     root.run(args=["configure", "--set-log-level", "INFO"])
-
+    config_path = config_path_for_filename(root.path, "config.yaml")
+    config_path.write_text(config_path.read_text().replace("localhost", "127.0.0.1"))
     return root
 
 
