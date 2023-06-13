@@ -4,6 +4,7 @@ import asyncio
 from typing import Any, Optional, Tuple
 
 from chia.protocols.wallet_protocol import CoinState
+from chia.types.block import BlockIdentifier
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.header_block import HeaderBlock
 from chia.util.hash import std_hash
@@ -133,17 +134,17 @@ class PeerRequestCache:
 
 
 def can_use_peer_request_cache(
-    coin_state: CoinState, peer_request_cache: PeerRequestCache, fork_height: Optional[uint32]
+    coin_state: CoinState, peer_request_cache: PeerRequestCache, fork_block: Optional[BlockIdentifier]
 ) -> bool:
     if not peer_request_cache.in_states_validated(coin_state.get_hash()):
         return False
-    if fork_height is None:
+    if fork_block is None:
         return True
     if coin_state.created_height is None and coin_state.spent_height is None:
         # Performing a reorg
         return False
-    if coin_state.created_height is not None and coin_state.created_height > fork_height:
+    if coin_state.created_height is not None and coin_state.created_height > fork_block.height:
         return False
-    if coin_state.spent_height is not None and coin_state.spent_height > fork_height:
+    if coin_state.spent_height is not None and coin_state.spent_height > fork_block.height:
         return False
     return True

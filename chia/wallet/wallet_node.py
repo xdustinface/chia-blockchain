@@ -39,6 +39,7 @@ from chia.server.outbound_message import Message, NodeType, make_msg
 from chia.server.peer_store_resolver import PeerStoreResolver
 from chia.server.server import ChiaServer
 from chia.server.ws_connection import WSChiaConnection
+from chia.types.block import BlockIdentifier
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.header_block import HeaderBlock
@@ -532,10 +533,14 @@ class WalletNode:
                             continue
                     else:
                         peer = matching_peer[0]
+
+                    block_identifier = await self.get_block_identifier(fork_height, peer)
                     async with self.wallet_state_manager.db_wrapper.writer():
                         self.log.info(f"retrying coin_state: {state}")
                         await self.wallet_state_manager.add_coin_states(
-                            [state], peer, None if fork_height == 0 else fork_height
+                            [state],
+                            peer,
+                            block_identifier,
                         )
             except asyncio.CancelledError:
                 self.log.info("Retry task cancelled, exiting.")
@@ -824,7 +829,7 @@ class WalletNode:
         self,
         items_input: List[CoinState],
         peer: WSChiaConnection,
-        fork_height: Optional[uint32] = None,
+        fork_block: Optional[BlockIdentifier] = None,
         height: Optional[uint32] = None,
         header_hash: Optional[bytes32] = None,
     ) -> bool:
@@ -847,18 +852,18 @@ class WalletNode:
 
         if (
             trusted
-            and fork_height is not None
+            and fork_block is not None
             and height is not None
-            and fork_height != height - 1
+            and fork_block.height != height - 1
             and peer.peer_node_id in self.synced_peers
         ):
             # only one peer told us to rollback so only clear for that peer
-            await self.perform_atomic_rollback(fork_height, cache=cache)
+            await self.perform_atomic_rollback(fork_block.height, cache=cache)
         else:
-            if fork_height is not None:
+            if fork_block is not None:
                 # only one peer told us to rollback so only clear for that peer
-                cache.clear_after_height(fork_height)
-                self.log.info(f"clear_after_height {fork_height} for peer {peer}")
+                cache.clear_after_height(fork_block.height)
+                self.log.info(f"clear_after_height {fork_block} for peer {peer}")
 
         all_tasks: List[asyncio.Task[None]] = []
         target_concurrent_tasks: int = 30
@@ -883,7 +888,7 @@ class WalletNode:
                     valid_states = [
                         inner_state
                         for inner_state in inner_states
-                        if await self.validate_received_state_from_peer(inner_state, peer, cache, fork_height)
+                        if await self.validate_received_state_from_peer(inner_state, peer, cache, fork_block)
                     ]
                     if len(valid_states) > 0:
                         async with self.wallet_state_manager.db_wrapper.writer():
@@ -891,7 +896,7 @@ class WalletNode:
                                 f"new coin state received ({inner_idx_start}-"
                                 f"{inner_idx_start + len(inner_states) - 1}/ {len(items)})"
                             )
-                            await self.wallet_state_manager.add_coin_states(valid_states, peer, fork_height)
+                            await self.wallet_state_manager.add_coin_states(valid_states, peer, fork_block)
             except Exception as e:
                 tb = traceback.format_exc()
                 log_level = logging.DEBUG if peer.closed or self._shut_down else logging.ERROR
@@ -913,7 +918,7 @@ class WalletNode:
             if trusted:
                 async with self.wallet_state_manager.db_wrapper.writer():
                     self.log.info(f"new coin state received ({idx}-{idx + len(batch.entries) - 1}/ {len(items)})")
-                    if not await self.wallet_state_manager.add_coin_states(batch.entries, peer, fork_height):
+                    if not await self.wallet_state_manager.add_coin_states(batch.entries, peer, fork_block):
                         return False
             else:
                 while len(all_tasks) >= target_concurrent_tasks:
@@ -973,11 +978,12 @@ class WalletNode:
         for coin in request.items:
             self.log.info(f"request coin: {coin.coin.name().hex()}{coin}")
 
+        block_identifier = await self.get_block_identifier(request.fork_height, peer)
         async with self.wallet_state_manager.lock:
             await self.add_states_from_peer(
                 request.items,
                 peer,
-                request.fork_height,
+                block_identifier,
                 request.height,
                 request.peak_hash,
             )
@@ -1038,6 +1044,17 @@ class WalletNode:
             return last_tx_block.foliage_transaction_block.timestamp
 
         raise PeerRequestException("Error fetching timestamp from all peers")
+
+    async def get_block_identifier(self, height: uint32, peer: WSChiaConnection) -> BlockIdentifier:
+        # TODO: New wallet protocol should include the hashes already in the initial messages so that this is not needed
+        #       because it's an additional request to the full node if the hash is not cached.
+        header_block = self.get_cache_for_peer(peer).get_block(height)
+        if header_block is not None:
+            return BlockIdentifier(header_block.header_hash, height)
+        response = await request_header_blocks(peer, height, height)
+        if response is None:
+            raise PeerRequestException(f"Failed to fetch header block for height {height}")
+        return BlockIdentifier(response[0].header_hash, height)
 
     async def new_peak_wallet(self, new_peak: NewPeakWallet, peer: WSChiaConnection) -> None:
         if self._wallet_state_manager is None:
@@ -1297,7 +1314,7 @@ class WalletNode:
         coin_state: CoinState,
         peer: WSChiaConnection,
         peer_request_cache: PeerRequestCache,
-        fork_height: Optional[uint32],
+        fork_block: Optional[BlockIdentifier],
     ) -> bool:
         """
         Returns all state that is valid and included in the blockchain proved by the weight proof. If return_old_states
@@ -1307,7 +1324,7 @@ class WalletNode:
             return False
         # Only use the cache if we are talking about states before the fork point. If we are evaluating something
         # in a reorg, we cannot use the cache, since we don't know if it's actually in the new chain after the reorg.
-        if can_use_peer_request_cache(coin_state, peer_request_cache, fork_height):
+        if can_use_peer_request_cache(coin_state, peer_request_cache, fork_block):
             return True
 
         spent_height: Optional[uint32] = None if coin_state.spent_height is None else uint32(coin_state.spent_height)
@@ -1590,7 +1607,7 @@ class WalletNode:
         return True
 
     async def get_coin_state(
-        self, coin_names: List[bytes32], peer: WSChiaConnection, fork_height: Optional[uint32] = None
+        self, coin_names: List[bytes32], peer: WSChiaConnection, fork_block: Optional[BlockIdentifier] = None
     ) -> List[CoinState]:
         msg = RegisterForCoinUpdates(coin_names, uint32(0))
         coin_state: Optional[RespondToCoinUpdates] = await peer.call_api(FullNodeAPI.register_interest_in_coin, msg)
@@ -1601,7 +1618,7 @@ class WalletNode:
             valid_list = []
             for coin in coin_state.coin_states:
                 valid = await self.validate_received_state_from_peer(
-                    coin, peer, self.get_cache_for_peer(peer), fork_height
+                    coin, peer, self.get_cache_for_peer(peer), fork_block
                 )
                 if valid:
                     valid_list.append(coin)
@@ -1610,7 +1627,7 @@ class WalletNode:
         return coin_state.coin_states
 
     async def fetch_children(
-        self, coin_name: bytes32, peer: WSChiaConnection, fork_height: Optional[uint32] = None
+        self, coin_name: bytes32, peer: WSChiaConnection, fork_block: Optional[BlockIdentifier] = None
     ) -> List[CoinState]:
         response: Optional[RespondChildren] = await peer.call_api(
             FullNodeAPI.request_children, RequestChildren(coin_name)
@@ -1622,7 +1639,7 @@ class WalletNode:
             request_cache = self.get_cache_for_peer(peer)
             validated = []
             for state in response.coin_states:
-                valid = await self.validate_received_state_from_peer(state, peer, request_cache, fork_height)
+                valid = await self.validate_received_state_from_peer(state, peer, request_cache, fork_block)
                 if valid:
                     validated.append(state)
             return validated

@@ -10,6 +10,7 @@ from typing_extensions import Literal
 from chia.data_layer.data_layer_wallet import DataLayerWallet
 from chia.protocols.wallet_protocol import CoinState
 from chia.server.ws_connection import WSChiaConnection
+from chia.types.block import BlockIdentifier
 from chia.types.blockchain_format.coin import Coin, coin_as_list
 from chia.types.blockchain_format.program import Program
 from chia.types.blockchain_format.sized_bytes import bytes32
@@ -120,7 +121,7 @@ class TradeManager:
         return None
 
     async def coins_of_interest_farmed(
-        self, coin_state: CoinState, fork_height: Optional[uint32], peer: WSChiaConnection
+        self, coin_state: CoinState, fork_block: Optional[BlockIdentifier], peer: WSChiaConnection
     ) -> None:
         """
         If both our coins and other coins in trade got removed that means that trade was successfully executed
@@ -152,7 +153,7 @@ class TradeManager:
         coin_states = await self.wallet_state_manager.wallet_node.get_coin_state(
             our_addition_ids,
             peer=peer,
-            fork_height=fork_height,
+            fork_block=fork_block,
         )
         assert coin_states is not None
         coin_state_names: List[bytes32] = [cs.coin.name() for cs in coin_states]

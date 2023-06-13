@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 
 from chia_rs import CoinState
 
+from chia.types.block import BlockIdentifier
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.util.db_wrapper import DBWrapper2
 from chia.util.ints import uint32
@@ -40,14 +41,14 @@ class WalletRetryStore:
 
         return [(CoinState.from_bytes(row[0]), bytes32(row[1]), uint32(row[2])) for row in rows]
 
-    async def add_state(self, state: CoinState, peer_id: bytes32, fork_height: Optional[uint32]) -> None:
+    async def add_state(self, state: CoinState, peer_id: bytes32, fork_block: Optional[BlockIdentifier]) -> None:
         """
         Adds object to key val store. Obj MUST support __bytes__ and bytes() methods.
         """
         async with self.db_wrapper.writer_maybe_transaction() as conn:
             cursor = await conn.execute(
                 "INSERT OR IGNORE INTO retry_store VALUES(?, ?, ?)",
-                (bytes(state), peer_id, 0 if fork_height is None else fork_height),
+                (bytes(state), peer_id, 0 if fork_block is None else fork_block.height),
             )
             await cursor.close()
 

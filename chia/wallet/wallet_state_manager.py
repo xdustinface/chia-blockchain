@@ -30,6 +30,7 @@ from chia.server.outbound_message import NodeType
 from chia.server.server import ChiaServer
 from chia.server.ws_connection import WSChiaConnection
 from chia.types.announcement import Announcement
+from chia.types.block import BlockIdentifier
 from chia.types.blockchain_format.coin import Coin
 from chia.types.blockchain_format.program import Program
 from chia.types.blockchain_format.sized_bytes import bytes32
@@ -640,7 +641,7 @@ class WalletStateManager:
         return removals
 
     async def determine_coin_type(
-        self, peer: WSChiaConnection, coin_state: CoinState, fork_height: Optional[uint32]
+        self, peer: WSChiaConnection, coin_state: CoinState, fork_block: Optional[BlockIdentifier]
     ) -> Optional[WalletIdentifier]:
         if coin_state.created_height is not None and (
             self.is_pool_reward(uint32(coin_state.created_height), coin_state.coin)
@@ -649,7 +650,7 @@ class WalletStateManager:
             return None
 
         response: List[CoinState] = await self.wallet_node.get_coin_state(
-            [coin_state.coin.parent_coin_info], peer=peer, fork_height=fork_height
+            [coin_state.coin.parent_coin_info], peer=peer, fork_block=fork_block
         )
         if len(response) == 0:
             self.log.warning(f"Could not find a parent coin with ID: {coin_state.coin.parent_coin_info}")
@@ -1213,7 +1214,7 @@ class WalletStateManager:
         self,
         coin_states: List[CoinState],
         peer: WSChiaConnection,
-        fork_height: Optional[uint32],
+        fork_block: Optional[BlockIdentifier],
     ) -> None:
         # TODO: add comment about what this method does
         # Input states should already be sorted by cs_height, with reorgs at the beginning
@@ -1258,13 +1259,13 @@ class WalletStateManager:
                             continue
 
                     if coin_state.spent_height is not None and coin_name in trade_removals:
-                        await self.trade_manager.coins_of_interest_farmed(coin_state, fork_height, peer)
+                        await self.trade_manager.coins_of_interest_farmed(coin_state, fork_block, peer)
                     if wallet_identifier is not None:
                         self.log.debug(f"Found existing wallet_identifier: {wallet_identifier}, coin: {coin_name}")
                     elif local_record is not None:
                         wallet_identifier = WalletIdentifier(uint32(local_record.wallet_id), local_record.wallet_type)
                     elif coin_state.created_height is not None:
-                        wallet_identifier = await self.determine_coin_type(peer, coin_state, fork_height)
+                        wallet_identifier = await self.determine_coin_type(peer, coin_state, fork_block)
                         try:
                             dl_wallet = self.get_dl_wallet()
                         except ValueError:
@@ -1310,7 +1311,7 @@ class WalletStateManager:
                     # if the coin has been spent
                     elif coin_state.created_height is not None and coin_state.spent_height is not None:
                         self.log.debug("Coin spent: %s", coin_state)
-                        children = await self.wallet_node.fetch_children(coin_name, peer=peer, fork_height=fork_height)
+                        children = await self.wallet_node.fetch_children(coin_name, peer=peer, fork_block=fork_block)
                         record = local_record
                         if record is None:
                             farmer_reward = False
@@ -1487,7 +1488,7 @@ class WalletStateManager:
                                     )
                                     await self.add_interested_coin_ids([new_singleton_coin.name()])
                                     new_coin_state: List[CoinState] = await self.wallet_node.get_coin_state(
-                                        [coin_name], peer=peer, fork_height=fork_height
+                                        [coin_name], peer=peer, fork_block=fork_block
                                     )
                                     assert len(new_coin_state) == 1
                                     curr_coin_state = new_coin_state[0]
@@ -1582,7 +1583,7 @@ class WalletStateManager:
                 if rollback_wallets is not None:
                     self.wallets = rollback_wallets  # Restore since DB will be rolled back by writer
                 if isinstance(e, PeerRequestException) or isinstance(e, aiosqlite.Error):
-                    await self.retry_store.add_state(coin_state, peer.peer_node_id, fork_height)
+                    await self.retry_store.add_state(coin_state, peer.peer_node_id, fork_block)
                 else:
                     await self.retry_store.remove_state(coin_state)
                 continue
@@ -1591,10 +1592,10 @@ class WalletStateManager:
         self,
         coin_states: List[CoinState],
         peer: WSChiaConnection,
-        fork_height: Optional[uint32],
+        fork_block: Optional[BlockIdentifier],
     ) -> bool:
         try:
-            await self._add_coin_states(coin_states, peer, fork_height)
+            await self._add_coin_states(coin_states, peer, fork_block)
         except Exception as e:
             log_level = logging.DEBUG if peer.closed else logging.ERROR
             self.log.log(log_level, f"add_coin_states failed - exception {e}, traceback: {traceback.format_exc()}")
