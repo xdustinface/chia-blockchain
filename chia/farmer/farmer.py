@@ -282,7 +282,7 @@ class Farmer:
                 self.pool_public_keys,
             )
             msg = make_msg(ProtocolMessageTypes.harvester_handshake, handshake)
-            await peer.send_message(msg)
+            peer.send_message(msg)
             self.harvester_handshake_task = None
 
         if peer.connection_type is NodeType.HARVESTER:

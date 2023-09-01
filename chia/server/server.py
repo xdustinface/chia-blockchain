@@ -552,7 +552,7 @@ class ChiaServer:
             if on_disconnect is not None:
                 on_disconnect(connection)
 
-    async def send_to_all(
+    def send_to_all(
         self,
         messages: List[Message],
         node_type: NodeType,
@@ -561,13 +561,13 @@ class ChiaServer:
         for _, connection in self.all_connections.items():
             if connection.connection_type is node_type and connection.peer_node_id != exclude:
                 for message in messages:
-                    await connection.send_message(message)
+                    connection.send_message(message)
 
-    async def send_to_specific(self, messages: List[Message], node_id: bytes32) -> None:
+    def send_to_specific(self, messages: List[Message], node_id: bytes32) -> None:
         if node_id in self.all_connections:
             connection = self.all_connections[node_id]
             for message in messages:
-                await connection.send_message(message)
+                connection.send_message(message)
 
     async def call_api_of_specific(
         self, request_method: Callable[..., Awaitable[Optional[Message]]], message_data: Streamable, node_id: bytes32

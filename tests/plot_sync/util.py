@@ -26,7 +26,7 @@ class WSChiaConnectionDummy:
     peer_info: PeerInfo = PeerInfo("127.0.0.1", uint16(0))
     last_sent_message: Optional[Message] = None
 
-    async def send_message(self, message: Message) -> None:
+    def send_message(self, message: Message) -> None:
         self.last_sent_message = message
 
 

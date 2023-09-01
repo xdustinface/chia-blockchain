@@ -768,9 +768,9 @@ class FullNode:
 
             msg = make_msg(ProtocolMessageTypes.new_peak_timelord, timelord_new_peak)
             if peer is None:
-                await self.server.send_to_all([msg], NodeType.TIMELORD)
+                self.server.send_to_all([msg], NodeType.TIMELORD)
             else:
-                await self.server.send_to_specific([msg], peer.peer_node_id)
+                self.server.send_to_specific([msg], peer.peer_node_id)
 
     async def synced(self) -> bool:
         if "simulator" in str(self.config.get("selected_network")):
@@ -816,7 +816,7 @@ class FullNode:
                 mempool_request = full_node_protocol.RequestMempoolTransactions(my_filter)
 
                 msg = make_msg(ProtocolMessageTypes.request_mempool_transactions, mempool_request)
-                await connection.send_message(msg)
+                connection.send_message(msg)
 
         peak_full: Optional[FullBlock] = await self.blockchain.get_full_peak()
 
@@ -830,7 +830,7 @@ class FullNode:
                     peak.height,
                     peak_full.reward_chain_block.get_unfinished().get_hash(),
                 )
-                await connection.send_message(make_msg(ProtocolMessageTypes.new_peak, request_node))
+                connection.send_message(make_msg(ProtocolMessageTypes.new_peak, request_node))
 
             elif connection.connection_type is NodeType.WALLET:
                 # If connected to a wallet, send the Peak
@@ -840,7 +840,7 @@ class FullNode:
                     peak.weight,
                     peak.height,
                 )
-                await connection.send_message(make_msg(ProtocolMessageTypes.new_peak_wallet, request_wallet))
+                connection.send_message(make_msg(ProtocolMessageTypes.new_peak_wallet, request_wallet))
             elif connection.connection_type is NodeType.TIMELORD:
                 await self.send_peak_to_timelords()
 
@@ -1166,7 +1166,7 @@ class FullNode:
                 list(changes),
             )
             msg = make_msg(ProtocolMessageTypes.coin_state_update, state)
-            await ws_peer.send_message(msg)
+            ws_peer.send_message(msg)
 
     async def add_block_batch(
         self,
@@ -1321,7 +1321,7 @@ class FullNode:
             request.reward_chain_vdf.challenge,
         )
         msg = make_msg(ProtocolMessageTypes.new_signage_point_or_end_of_sub_slot, broadcast)
-        await self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
+        self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
 
         peak = self.blockchain.get_peak()
         if peak is not None and peak.height > self.constants.MAX_SUB_SLOT_BLOCKS:
@@ -1349,7 +1349,7 @@ class FullNode:
             uint32(0) if peak is None else peak.height,
         )
         msg = make_msg(ProtocolMessageTypes.new_signage_point, broadcast_farmer)
-        await self.server.send_to_all([msg], NodeType.FARMER)
+        self.server.send_to_all([msg], NodeType.FARMER)
 
         self._state_changed("signage_point", {"broadcast_farmer": broadcast_farmer})
 
@@ -1489,7 +1489,7 @@ class FullNode:
                 fees,
             )
             msg = make_msg(ProtocolMessageTypes.new_transaction, new_tx)
-            await self.server.send_to_all([msg], NodeType.FULL_NODE)
+            self.server.send_to_all([msg], NodeType.FULL_NODE)
 
         # If there were pending end of slots that happen after this peak, broadcast them if they are added
         if ppp_result.fns_peak_result.added_eos is not None:
@@ -1500,7 +1500,7 @@ class FullNode:
                 ppp_result.fns_peak_result.added_eos.reward_chain.end_of_slot_vdf.challenge,
             )
             msg = make_msg(ProtocolMessageTypes.new_signage_point_or_end_of_sub_slot, broadcast)
-            await self.server.send_to_all([msg], NodeType.FULL_NODE)
+            self.server.send_to_all([msg], NodeType.FULL_NODE)
 
         # TODO: maybe add and broadcast new IPs as well
 
@@ -1524,9 +1524,9 @@ class FullNode:
                 ),
             )
             if peer is not None:
-                await self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
+                self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
             else:
-                await self.server.send_to_all([msg], NodeType.FULL_NODE)
+                self.server.send_to_all([msg], NodeType.FULL_NODE)
 
         # Tell wallets about the new peak
         msg = make_msg(
@@ -1539,7 +1539,7 @@ class FullNode:
             ),
         )
         await self.update_wallets(state_change_summary, ppp_result.hints, ppp_result.lookup_coin_ids)
-        await self.server.send_to_all([msg], NodeType.WALLET)
+        self.server.send_to_all([msg], NodeType.WALLET)
         self._state_changed("new_peak")
 
     async def add_block(
@@ -1948,14 +1948,14 @@ class FullNode:
         )
 
         timelord_msg = make_msg(ProtocolMessageTypes.new_unfinished_block_timelord, timelord_request)
-        await self.server.send_to_all([timelord_msg], NodeType.TIMELORD)
+        self.server.send_to_all([timelord_msg], NodeType.TIMELORD)
 
         full_node_request = full_node_protocol.NewUnfinishedBlock(block.reward_chain_block.get_hash())
         msg = make_msg(ProtocolMessageTypes.new_unfinished_block, full_node_request)
         if peer is not None:
-            await self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
+            self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
         else:
-            await self.server.send_to_all([msg], NodeType.FULL_NODE)
+            self.server.send_to_all([msg], NodeType.FULL_NODE)
 
         self._state_changed("unfinished_block")
 
@@ -2129,7 +2129,7 @@ class FullNode:
                     end_of_slot_bundle.reward_chain.end_of_slot_vdf.challenge,
                 )
                 msg = make_msg(ProtocolMessageTypes.new_signage_point_or_end_of_sub_slot, broadcast)
-                await self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
+                self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
 
                 for infusion in new_infusions:
                     await self.new_infusion_point_vdf(infusion)
@@ -2145,7 +2145,7 @@ class FullNode:
                     uint32(0) if peak is None else peak.height,
                 )
                 msg = make_msg(ProtocolMessageTypes.new_signage_point, broadcast_farmer)
-                await self.server.send_to_all([msg], NodeType.FARMER)
+                self.server.send_to_all([msg], NodeType.FARMER)
                 return None, True
             else:
                 self.log.info(
@@ -2219,9 +2219,9 @@ class FullNode:
                 )
                 msg = make_msg(ProtocolMessageTypes.new_transaction, new_tx)
                 if peer is None:
-                    await self.server.send_to_all([msg], NodeType.FULL_NODE)
+                    self.server.send_to_all([msg], NodeType.FULL_NODE)
                 else:
-                    await self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
+                    self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
                 if self.simulator_transaction_callback is not None:  # callback
                     await self.simulator_transaction_callback(spend_name)  # pylint: disable=E1102
             else:
@@ -2389,7 +2389,7 @@ class FullNode:
             full_node_protocol.NewCompactVDF(request.height, request.header_hash, request.field_vdf, request.vdf_info),
         )
         if self._server is not None:
-            await self.server.send_to_all([msg], NodeType.FULL_NODE)
+            self.server.send_to_all([msg], NodeType.FULL_NODE)
 
     async def new_compact_vdf(self, request: full_node_protocol.NewCompactVDF, peer: WSChiaConnection) -> None:
         peak = self.blockchain.get_peak()
@@ -2455,7 +2455,7 @@ class FullNode:
             vdf_proof,
         )
         msg = make_msg(ProtocolMessageTypes.respond_compact_vdf, compact_vdf)
-        await peer.send_message(msg)
+        peer.send_message(msg)
 
     async def add_compact_vdf(self, request: full_node_protocol.RespondCompactVDF, peer: WSChiaConnection) -> None:
         field_vdf = CompressibleVDFField(int(request.field_vdf))
@@ -2475,7 +2475,7 @@ class FullNode:
             full_node_protocol.NewCompactVDF(request.height, request.header_hash, request.field_vdf, request.vdf_info),
         )
         if self._server is not None:
-            await self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
+            self.server.send_to_all([msg], NodeType.FULL_NODE, peer.peer_node_id)
 
     def in_bad_peak_cache(self, wp: WeightProof) -> bool:
         for block in wp.recent_chain_data:
@@ -2608,7 +2608,7 @@ class FullNode:
                     for new_pot in broadcast_list:
                         msg = make_msg(ProtocolMessageTypes.request_compact_proof_of_time, new_pot)
                         msgs.append(msg)
-                    await self.server.send_to_all(msgs, NodeType.TIMELORD)
+                    self.server.send_to_all(msgs, NodeType.TIMELORD)
                 await asyncio.sleep(uncompact_interval_scan)
         except Exception as e:
             error_stack = traceback.format_exc()

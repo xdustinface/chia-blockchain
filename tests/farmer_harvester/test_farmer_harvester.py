@@ -163,7 +163,7 @@ async def test_farmer_respond_signatures(
         message_signatures=[],
     )
     msg = make_msg(ProtocolMessageTypes.respond_signatures, response)
-    await harvester_service._node.server.send_to_all([msg], NodeType.FARMER)
+    harvester_service._node.server.send_to_all([msg], NodeType.FARMER)
     await time_out_assert(5, log_is_ready)
     # We fail the sps record check
     expected_error = f"Do not have challenge hash {challenge_hash}"

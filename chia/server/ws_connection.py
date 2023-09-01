@@ -427,7 +427,7 @@ class WSChiaConnection:
 
             if response is not None:
                 response_message = Message(response.type, full_message.id, response.data)
-                await self.send_message(response_message)
+                self.send_message(response_message)
             # todo uncomment when enabling none response capability
             # check that this call needs a reply
             # elif self.has_capability(
@@ -435,7 +435,7 @@ class WSChiaConnection:
             # ):
             #     # this peer can accept None reply's, send empty msg back, so it doesn't wait for timeout
             #     response_message = Message(uint8(ProtocolMessageTypes.none_response.value), full_message.id, b"")
-            #     await self.send_message(response_message)
+            #     self.send_message(response_message)
         except TimeoutError:
             self.log.error(f"Timeout error for: {message_type}")
         except TimestampError:
@@ -481,11 +481,11 @@ class WSChiaConnection:
             self.log.error(f"Exception: {e}")
             self.log.error(f"Exception Stack: {error_stack}")
 
-    async def send_message(self, message: Message) -> bool:
+    def send_message(self, message: Message) -> bool:
         """Send message sends a message with no tracking / callback."""
         if self.closed:
             return False
-        await self.outgoing_queue.put(message)
+        self.outgoing_queue.put_nowait(message)
         return True
 
     async def call_api(

@@ -486,7 +486,7 @@ class WalletNode:
                 if peer.peer_node_id in sent_peers:
                     continue
                 self.log.debug(f"sending: {msg}")
-                await peer.send_message(msg)
+                peer.send_message(msg)
 
     async def _messages_to_resend(self) -> List[Tuple[Message, Set[bytes32]]]:
         if self._wallet_state_manager is None or self._shut_down:
@@ -708,7 +708,7 @@ class WalletNode:
         for msg, peer_ids in messages_peer_ids:
             if peer.peer_node_id in peer_ids:
                 continue
-            await peer.send_message(msg)
+            peer.send_message(msg)
 
         if self.wallet_peers is not None:
             await self.wallet_peers.on_connect(peer)
@@ -1632,11 +1632,11 @@ class WalletNode:
         return response.coin_states
 
     # For RPC only. You should use wallet_state_manager.add_pending_transaction for normal wallet business.
-    async def push_tx(self, spend_bundle: SpendBundle) -> None:
+    def push_tx(self, spend_bundle: SpendBundle) -> None:
         msg = make_msg(ProtocolMessageTypes.send_transaction, SendTransaction(spend_bundle))
         full_nodes = self.server.get_connections(NodeType.FULL_NODE)
         for peer in full_nodes:
-            await peer.send_message(msg)
+            peer.send_message(msg)
 
     async def _update_balance_cache(self, wallet_id: uint32) -> None:
         assert self.wallet_state_manager.lock.locked(), "WalletStateManager.lock required"

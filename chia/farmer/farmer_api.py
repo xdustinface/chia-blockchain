@@ -137,7 +137,7 @@ class FarmerAPI:
                 )
                 self.farmer.cache_add_time[computed_quality_string] = uint64(int(time.time()))
 
-                await peer.send_message(make_msg(ProtocolMessageTypes.request_signatures, request))
+                peer.send_message(make_msg(ProtocolMessageTypes.request_signatures, request))
 
             p2_singleton_puzzle_hash = new_proof_of_space.proof.pool_contract_puzzle_hash
             if p2_singleton_puzzle_hash is not None:
@@ -423,7 +423,7 @@ class FarmerAPI:
             message = make_msg(ProtocolMessageTypes.declare_proof_of_space, request)
         if isinstance(request, SignedValues):
             message = make_msg(ProtocolMessageTypes.signed_values, request)
-        await self.farmer.server.send_to_all([message], NodeType.FULL_NODE)
+        self.farmer.server.send_to_all([message], NodeType.FULL_NODE)
 
     """
     FARMER PROTOCOL (FARMER <-> FULL NODE)
@@ -472,7 +472,7 @@ class FarmerAPI:
             )
 
             msg = make_msg(ProtocolMessageTypes.new_signage_point_harvester, message)
-            await self.farmer.server.send_to_all([msg], NodeType.HARVESTER)
+            self.farmer.server.send_to_all([msg], NodeType.HARVESTER)
         except Exception as exception:
             # Remove here, as we want to reprocess the SP should it be sent again
             self.farmer.sps[new_signage_point.challenge_chain_sp].remove(new_signage_point)

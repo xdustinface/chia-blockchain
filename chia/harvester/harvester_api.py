@@ -261,7 +261,7 @@ class HarvesterAPI:
             for response in sublist:
                 total_proofs_found += 1
                 msg = make_msg(ProtocolMessageTypes.new_proof_of_space, response)
-                await peer.send_message(msg)
+                peer.send_message(msg)
 
         now = uint64(int(time.time()))
 
@@ -275,7 +275,7 @@ class HarvesterAPI:
             uint64(time_taken * 1_000_000),  # microseconds
         )
         pass_msg = make_msg(ProtocolMessageTypes.farming_info, farming_info)
-        await peer.send_message(pass_msg)
+        peer.send_message(pass_msg)
 
         self.harvester.log.info(
             f"{len(awaitables)} plots were eligible for farming {new_challenge.challenge_hash.hex()[:10]}..."

@@ -103,7 +103,7 @@ async def test_api_not_ready(
         return "API not ready, ignore request: {'data': '0x00000000', 'id': None, 'type': 53}" in caplog.text
 
     with caplog.at_level(logging.WARNING):
-        assert await connection.send_message(
+        assert connection.send_message(
             make_msg(ProtocolMessageTypes.reject_header_request, RejectHeaderRequest(uint32(0)))
         )
         await time_out_assert(10, request_ignored)

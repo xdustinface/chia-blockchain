@@ -212,14 +212,14 @@ async def skip_processing(self: Any, _: WSChiaConnection, message_type: Protocol
             await asyncio.sleep(Constants.message_timeout + 1)
             return False
     if self.simulate_error == ErrorSimulation.RespondTwice:
-        await self.connection().send_message(
+        self.connection().send_message(
             make_msg(
                 ProtocolMessageTypes.plot_sync_response,
                 PlotSyncResponse(message.identifier, int16(message_type.value), None),
             )
         )
     if self.simulate_error == ErrorSimulation.NonRecoverableError and self.message_counter > 1:
-        await self.connection().send_message(
+        self.connection().send_message(
             make_msg(
                 ProtocolMessageTypes.plot_sync_response,
                 PlotSyncResponse(

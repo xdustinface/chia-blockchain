@@ -199,7 +199,7 @@ class FullNodeAPI:
                         random_peer = full_node.server.all_connections[peer_id]
                         request_tx = full_node_protocol.RequestTransaction(transaction.transaction_id)
                         msg = make_msg(ProtocolMessageTypes.request_transaction, request_tx)
-                        await random_peer.send_message(msg)
+                        random_peer.send_message(msg)
                         await asyncio.sleep(5)
                         counter += 1
                         if full_node.mempool_manager.seen(transaction_id):
@@ -676,7 +676,7 @@ class FullNodeAPI:
         for item in items:
             transaction = full_node_protocol.RespondTransaction(item)
             msg = make_msg(ProtocolMessageTypes.respond_transaction, transaction)
-            await peer.send_message(msg)
+            peer.send_message(msg)
         return None
 
     # FARMER PROTOCOL
@@ -950,7 +950,7 @@ class FullNodeAPI:
                 foliage_sb_data_hash,
                 foliage_transaction_block_hash,
             )
-            await peer.send_message(make_msg(ProtocolMessageTypes.request_signed_values, message))
+            peer.send_message(make_msg(ProtocolMessageTypes.request_signed_values, message))
 
             # Adds backup in case the first one fails
             if unfinished_block.is_transaction_block() and unfinished_block.transactions_generator is not None:
@@ -1045,7 +1045,7 @@ class FullNodeAPI:
                     unfinished_block.foliage.foliage_block_data.get_hash(),
                     unfinished_block.foliage.foliage_transaction_block_hash,
                 )
-                await peer.send_message(make_msg(ProtocolMessageTypes.request_signed_values, message))
+                peer.send_message(make_msg(ProtocolMessageTypes.request_signed_values, message))
         return None
 
     # TIMELORD PROTOCOL

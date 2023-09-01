@@ -163,9 +163,9 @@ class Receiver:
             f"_process: node_id {self.connection().peer_node_id}, message_type: {message_type}, message: {message}"
         )
 
-        async def send_response(plot_sync_error: Optional[PlotSyncError] = None) -> None:
+        def send_response(plot_sync_error: Optional[PlotSyncError] = None) -> None:
             if self._connection is not None:
-                await self._connection.send_message(
+                self._connection.send_message(
                     make_msg(
                         ProtocolMessageTypes.plot_sync_response,
                         PlotSyncResponse(message.identifier, int16(message_type.value), plot_sync_error),
@@ -174,16 +174,16 @@ class Receiver:
 
         try:
             await method(message)
-            await send_response()
+            send_response()
         except InvalidIdentifierError as e:
             log.warning(f"_process: node_id {self.connection().peer_node_id}, InvalidIdentifierError {e}")
-            await send_response(PlotSyncError(int16(e.error_code), f"{e}", e.expected_identifier))
+            send_response(PlotSyncError(int16(e.error_code), f"{e}", e.expected_identifier))
         except PlotSyncException as e:
             log.warning(f"_process: node_id {self.connection().peer_node_id}, Error {e}")
-            await send_response(PlotSyncError(int16(e.error_code), f"{e}", None))
+            send_response(PlotSyncError(int16(e.error_code), f"{e}", None))
         except Exception as e:
             log.warning(f"_process: node_id {self.connection().peer_node_id}, Exception {e}")
-            await send_response(PlotSyncError(int16(ErrorCodes.unknown), f"{e}", None))
+            send_response(PlotSyncError(int16(ErrorCodes.unknown), f"{e}", None))
 
     def _validate_identifier(self, identifier: PlotSyncIdentifier, start: bool = False) -> None:
         sync_id_match = identifier.sync_id == self._current_sync.sync_id

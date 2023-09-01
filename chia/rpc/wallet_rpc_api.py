@@ -547,7 +547,7 @@ class WalletRpcApi:
         nodes = self.service.server.get_connections(NodeType.FULL_NODE)
         if len(nodes) == 0:
             raise ValueError("Wallet is not currently connected to any full node peers")
-        await self.service.push_tx(SpendBundle.from_bytes(hexstr_to_bytes(request["spend_bundle"])))
+        self.service.push_tx(SpendBundle.from_bytes(hexstr_to_bytes(request["spend_bundle"])))
         return {}
 
     async def push_transactions(self, request: Dict[str, Any]) -> EndpointResult:
@@ -568,7 +568,7 @@ class WalletRpcApi:
         raw_puzzle_hash = decode_puzzle_hash(request["address"])
         msg = make_msg(ProtocolMessageTypes.farm_new_block, FarmNewBlockProtocol(raw_puzzle_hash))
 
-        await self.service.server.send_to_all([msg], NodeType.FULL_NODE)
+        self.service.server.send_to_all([msg], NodeType.FULL_NODE)
         return {}
 
     async def get_timestamp_for_height(self, request: Dict[str, Any]) -> EndpointResult:
