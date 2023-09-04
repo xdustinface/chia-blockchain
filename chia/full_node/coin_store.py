@@ -427,7 +427,7 @@ class CoinStore:
             ) as cursor:
                 for row in await cursor.fetchall():
                     coin = self.row_to_coin(row)
-                    record = CoinRecord(coin, uint32(0), row[1], row[2], uint64(0))
+                    record = CoinRecord(coin, uint32(0), uint32(0), row[2], uint64(0))
                     coin_changes[record.name] = record
 
             # Delete reverted blocks from storage
@@ -441,7 +441,7 @@ class CoinStore:
             ) as cursor:
                 for row in await cursor.fetchall():
                     coin = self.row_to_coin(row)
-                    record = CoinRecord(coin, row[0], uint32(0), row[2], row[6])
+                    record = CoinRecord(coin, uint32(0), uint32(0), row[2], row[6])
                     if record.name not in coin_changes:
                         coin_changes[record.name] = record
 

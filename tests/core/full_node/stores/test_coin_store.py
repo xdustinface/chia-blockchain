@@ -303,9 +303,13 @@ class TestCoinStoreWithBlocks:
 
             # The reorg will revert the creation and spend of many coins. It will also revert the spend (but not the
             # creation) of the selected coin.
-            changed_records = await coin_store.rollback_to_block(reorg_index)
-            changed_coin_records = [cr.coin for cr in changed_records]
-            assert selected_coin in changed_records
+            changed_coin_records = []
+            for rolled_back_record in await coin_store.rollback_to_block(reorg_index):
+                assert rolled_back_record.confirmed_block_index == 0
+                assert rolled_back_record.spent_block_index == 0
+                changed_coin_records.append(rolled_back_record.coin)
+
+            assert selected_coin.coin in changed_coin_records
             for coin_record in all_records:
                 assert coin_record is not None
                 if coin_record.confirmed_block_index > reorg_index:
